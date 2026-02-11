@@ -1,0 +1,13 @@
+[package]
+name = "dreamseeker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dreamseeker_util = { path = "../dreamseeker_util" }
+
+bevy = "0.18.0"
+avian3d = { version = "0.6.0-rc.1", features = ["collider-from-mesh"] }
+bevy_enhanced_input = "0.23.2"
+bevy_skein = "0.5.0"
+bevy_framepace = "0.21.0"
