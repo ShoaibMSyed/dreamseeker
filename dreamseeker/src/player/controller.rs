@@ -5,6 +5,7 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
+    collision::GameLayer,
     input::player::{Dash, Jump, Move, Slide, Walk},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
     util::angle::Angle,
@@ -203,6 +204,7 @@ impl PlayerState {
 #[require(
     Collider,
     RigidBody::Kinematic,
+    CollisionLayers::new(GameLayer::Player, LayerMask::ALL),
     TransformInterpolation,
     CustomPositionIntegration,
     PlayerInput,
@@ -276,6 +278,7 @@ struct Mover<'a, 'w1, 's1, 'w2, 's2, 'w3> {
     msg: &'a mut MessageWriter<'w3, PlayerControllerMessage>,
     delta: Duration,
     dt: f32,
+    filter: SpatialQueryFilter,
 }
 
 impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
@@ -286,6 +289,8 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         delta: Duration,
     ) -> Self {
         Self {
+            filter: SpatialQueryFilter::from_excluded_entities([data.entity])
+                .with_mask(GameLayer::Level),
             data,
             mas,
             msg,
@@ -536,7 +541,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             self.transform.translation,
             Quat::default(),
             &DepenetrationConfig::default(),
-            &SpatialQueryFilter::from_excluded_entities([self.entity]),
+            &self.filter,
         );
 
         let Some(hit) = self.mas.cast_move(
@@ -545,7 +550,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             Quat::default(),
             Vec3::NEG_Y * self.settings.floor_snap,
             0.01,
-            &SpatialQueryFilter::from_excluded_entities([self.entity]),
+            &self.filter,
         ) else {
             return;
         };
@@ -573,7 +578,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                     max_distance: 0.02,
                     ..default()
                 },
-                &SpatialQueryFilter::from_excluded_entities([self.entity]),
+                &self.filter,
             ) {
                 Some(hit) => {
                     if hit.normal1.y > self.settings.min_floor_angle {
@@ -616,7 +621,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             Quat::default(),
             Vec3::Y * self.settings.floor_snap,
             0.01,
-            &SpatialQueryFilter::from_excluded_entities([self.entity]),
+            &self.filter,
         );
 
         let stepped_up = match step_up {
@@ -634,7 +639,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             Quat::default(),
             Vec3::NEG_Y * self.settings.step,
             0.01,
-            &SpatialQueryFilter::from_excluded_entities([self.entity]),
+            &self.filter,
         );
 
         match snap_down {
@@ -687,7 +692,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 },
                 ..default()
             },
-            &SpatialQueryFilter::from_excluded_entities([self.entity]),
+            &self.filter,
             |_hit| {
                 unimpeded = false;
 

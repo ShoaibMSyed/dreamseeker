@@ -15,6 +15,7 @@ use dreamseeker_util::DreamSeekerUtil;
 
 use self::player::{Player, camera::PlayerCamera};
 
+mod collision;
 mod input;
 mod player;
 mod trigger;
