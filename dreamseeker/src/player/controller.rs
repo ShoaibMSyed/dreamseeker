@@ -32,6 +32,9 @@ pub struct PlayerControllerSettings {
     pub air_jumps: u8,
     pub air_jump_forward_boost: f32,
     
+    pub dash_enabled: bool,
+    pub dash_velocity: f32,
+    pub dash_height: f32,
     
     pub run_speed: f32,
 
@@ -55,6 +58,10 @@ impl Default for PlayerControllerSettings {
 
             air_jumps: 2,
             air_jump_forward_boost: 4.5,
+
+            dash_enabled: true,
+            dash_velocity: 10.0,
+            dash_height: 0.5,
             
             run_speed: 5.5,
 
@@ -112,6 +119,7 @@ pub struct GroundedState;
 #[derive(Reflect, Default)]
 pub struct AirState {
     pub air_jumps: u8,
+    pub dashed: bool,
     pub jump_state: JumpState,
     pub coyote_countdown: f32,
 }
@@ -289,6 +297,21 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
             state.jump_state = JumpState::None;
         }
 
+        // Dash
+        if self.data.settings.dash_enabled && !state.dashed && self.data.input.slide.contains(ActionEvents::START) {
+            state.dashed = true;
+
+            let dir = Vec2::from_angle(self.data.pc.facing.get());
+            let dir = Dir3::new(vec3(dir.y, 0.0, dir.x)).unwrap_or(Dir3::Z);
+
+            let hvel = vec3(self.data.velocity.x, 0.0, self.data.velocity.z);
+            let speed_towards_dir = speed_towards_dir(hvel, dir);
+
+            let boost = (self.data.settings.dash_velocity - speed_towards_dir).max(0.0);
+            self.data.velocity.0 += dir * boost;
+            self.data.velocity.y = (2.0 * self.data.settings.gravity * self.data.settings.dash_height).sqrt();
+        }
+
         if state.air_jumps < self.data.settings.air_jumps
             && self.data.input.jump.contains(ActionEvents::START)
         {
@@ -302,16 +325,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
 
                 if let Ok(dir) = Dir3::new(vec3(self.data.input.movement.x, 0.0, self.data.input.movement.y)) {
                     let hvel = vec3(self.data.velocity.x, 0.0, self.data.velocity.z);
-                    let speed_towards_dir = {
-                        let angle = hvel.angle_between(dir.as_vec3());
-
-                        if angle <= PI / 2.0 {
-                            let vel_towards_dir = hvel.project_onto(dir.as_vec3());
-                            vel_towards_dir.length()
-                        } else {
-                            0.0
-                        }
-                    };
+                    let speed_towards_dir = speed_towards_dir(hvel, dir);
 
                     let boost = (self.settings.air_jump_forward_boost - speed_towards_dir).max(0.0);
                     self.data.velocity.0 += dir * boost;
@@ -536,5 +550,16 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         self.velocity.0 = projected_velocity;
 
         unimpeded
+    }
+}
+
+fn speed_towards_dir(speed: Vec3, dir: Dir3) -> f32 {
+    let angle = speed.angle_between(dir.as_vec3());
+
+    if angle <= PI / 2.0 {
+        let vel_towards_dir = speed.project_onto(dir.as_vec3());
+        vel_towards_dir.length()
+    } else {
+        0.0
     }
 }
