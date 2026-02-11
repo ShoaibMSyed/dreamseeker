@@ -39,7 +39,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 #[derive(Component, Reflect)]
-#[require(Camera3d, DepthPrepass, Msaa::Off, Fxaa)]
+#[require(Camera3d, DepthPrepass, Msaa::Off, Fxaa, SpatialListener)]
 pub struct PlayerCamera {
     pub zoom: f32,
 

@@ -5,7 +5,7 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    input::player::{Dash, Jump, Move, Slide},
+    input::player::{Dash, Jump, Move, Slide, Walk},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
     util::angle::Angle,
 };
@@ -13,7 +13,7 @@ use crate::{
 use super::{PlayerModel, camera::PlayerCamera};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(
+    app.add_message::<PlayerControllerMessage>().add_systems(
         FixedUpdate,
         (
             PlayerInput::gather,
@@ -44,6 +44,8 @@ pub struct PlayerControllerSettings {
     pub dash_velocity: f32,
     pub dash_height: f32,
 
+    /// When faster than `run_speed`, have no friction when landing on the ground for `coyote_friction` frames
+    pub coyote_friction: u8,
     pub run_speed: f32,
 
     pub slide_enabled: bool,
@@ -76,6 +78,7 @@ impl Default for PlayerControllerSettings {
             dash_velocity: 10.0,
             dash_height: 0.5,
 
+            coyote_friction: 3,
             run_speed: 5.5,
 
             slide_enabled: true,
@@ -102,6 +105,7 @@ impl PlayerInput {
     fn gather(
         mut pi: Single<(&mut PlayerController, &mut PlayerInput, &PlayerState)>,
         camera: Single<&PlayerCamera>,
+        walk: Single<&ActionState, With<Action<Walk>>>,
         jump: Single<&ActionEvents, With<Action<Jump>>>,
         slide: Single<&ActionEvents, With<Action<Slide>>>,
         dash: Single<&ActionEvents, With<Action<Dash>>>,
@@ -115,7 +119,7 @@ impl PlayerInput {
         pi.1.speed_modifier = movement.length();
         if pi.1.speed_modifier < 0.3 {
             pi.1.speed_modifier = 0.0;
-        } else if pi.1.speed_modifier < 0.7 {
+        } else if pi.1.speed_modifier < 0.7 || **walk == ActionState::Fired {
             pi.1.speed_modifier = 0.5;
         } else {
             pi.1.speed_modifier = 1.0;
@@ -141,7 +145,9 @@ pub enum JumpState {
 }
 
 #[derive(Reflect, Default)]
-pub struct GroundedState;
+pub struct GroundedState {
+    pub frame_count: u8,
+}
 
 #[derive(Reflect, Default)]
 pub struct AirState {
@@ -208,9 +214,14 @@ pub struct PlayerController {
 }
 
 impl PlayerController {
-    fn step(query: Query<MovementData>, mut mas: MoveAndSlide, time: Res<Time>) {
+    fn step(
+        query: Query<MovementData>,
+        mut mas: MoveAndSlide,
+        mut msg: MessageWriter<PlayerControllerMessage>,
+        time: Res<Time>,
+    ) {
         for move_data in query {
-            let mut mover = Mover::new(move_data, &mut mas, time.delta());
+            let mut mover = Mover::new(move_data, &mut mas, &mut msg, time.delta());
 
             mover.step();
         }
@@ -258,23 +269,26 @@ struct MovementData {
 }
 
 #[derive(Deref, DerefMut)]
-struct Mover<'a, 'w1, 's1, 'w2, 's2> {
+struct Mover<'a, 'w1, 's1, 'w2, 's2, 'w3> {
     #[deref]
     data: MovementDataItem<'w1, 's1>,
     mas: &'a mut MoveAndSlide<'w2, 's2>,
+    msg: &'a mut MessageWriter<'w3, PlayerControllerMessage>,
     delta: Duration,
     dt: f32,
 }
 
-impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
+impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
     fn new(
         data: MovementDataItem<'w, 's>,
         mas: &'a mut MoveAndSlide<'w2, 's2>,
+        msg: &'a mut MessageWriter<'w3, PlayerControllerMessage>,
         delta: Duration,
     ) -> Self {
         Self {
             data,
             mas,
+            msg,
             dt: delta.as_secs_f32(),
             delta,
         }
@@ -300,19 +314,52 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
     }
 
     fn update_grounded(&mut self) {
-        let PlayerState::Grounded(GroundedState) = &mut *self.data.state else {
+        let PlayerState::Grounded(state) = &mut *self.data.state else {
             return;
         };
 
-        self.velocity.x =
-            self.input.movement.x * self.input.speed_modifier * self.settings.run_speed;
-        self.velocity.z =
-            self.input.movement.y * self.input.speed_modifier * self.settings.run_speed;
+        let coyote_friction = state.frame_count < self.data.settings.coyote_friction;
+
+        if coyote_friction {
+            state.frame_count += 1;
+        }
+
+        let too_fast = self.velocity.xz().length() > self.settings.run_speed + 0.5;
+
+        if too_fast {
+            if !coyote_friction {
+                self.velocity.0 /= 1.5;
+            }
+
+            let attempted_velocity = self.velocity.0
+                + vec3(self.input.movement.x, 0.0, self.input.movement.y)
+                    * self.input.speed_modifier
+                    * self.settings.run_speed;
+
+            let cur_speed = self.velocity.length();
+
+            if let Ok(dir) = Dir3::new(attempted_velocity) {
+                self.velocity.0 = dir * cur_speed;
+            }
+        } else {
+            self.velocity.x =
+                self.input.movement.x * self.input.speed_modifier * self.settings.run_speed;
+            self.velocity.z =
+                self.input.movement.y * self.input.speed_modifier * self.settings.run_speed;
+        }
 
         self.ground_move();
 
+        self.velocity.y = 0.0;
+
         if self.input.jump.contains(ActionEvents::START) {
             self.ground_jump();
+
+            if too_fast && coyote_friction {
+                self.msg.write(PlayerControllerMessage::CoyoteFrictionJump);
+            } else {
+                self.msg.write(PlayerControllerMessage::GroundJump);
+            }
         } else if self.input.slide.contains(ActionEvents::START) && self.settings.slide_enabled {
             let dir = Vec2::from_angle(self.pc.facing.get());
             *self.state = PlayerState::Sliding(SlidingState {
@@ -389,9 +436,13 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
                     let boost = (self.settings.air_jump_forward_boost - speed_towards_dir).max(0.0);
                     self.data.velocity.0 += dir * boost;
                 }
+
+                self.msg.write(PlayerControllerMessage::AirJump);
             } else {
                 // Coyote Time
                 self.ground_jump();
+
+                self.msg.write(PlayerControllerMessage::CoyoteTimeJump);
             }
         }
 
@@ -411,7 +462,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         self.data.velocity.z = state.direction.y * self.data.settings.slide_speed;
 
         if state.timer >= self.data.settings.slide_time {
-            *self.state = PlayerState::Grounded(GroundedState);
+            *self.state = PlayerState::Grounded(default());
         }
 
         if self.input.jump.contains(ActionEvents::START) {
@@ -534,7 +585,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         }
 
         if grounded && !self.state.grounded() {
-            *self.state = PlayerState::Grounded(GroundedState);
+            *self.state = PlayerState::Grounded(default());
         } else if !grounded && self.state.grounded() {
             *self.state = PlayerState::Air(AirState::default().with_coyote(&self.settings));
         }
@@ -660,4 +711,12 @@ fn speed_towards_dir(speed: Vec3, dir: Dir3) -> f32 {
     } else {
         0.0
     }
+}
+
+#[derive(Message, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlayerControllerMessage {
+    GroundJump,
+    CoyoteTimeJump,
+    CoyoteFrictionJump,
+    AirJump,
 }

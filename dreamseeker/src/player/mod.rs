@@ -4,13 +4,14 @@ use avian3d::prelude::{
     Collider, LinearVelocity, ShapeCastConfig, SpatialQuery, SpatialQueryFilter,
 };
 use bevy::{
+    audio::{PlaybackMode, Volume},
     pbr::decal::{ForwardDecal, ForwardDecalMaterial, ForwardDecalMaterialExt},
     prelude::*,
     scene::SceneInstanceReady,
 };
 use dreamseeker_util::{construct::Make, observers};
 
-use self::controller::{PlayerController, PlayerState};
+use self::controller::{PlayerController, PlayerControllerMessage, PlayerState};
 
 pub mod camera;
 mod controller;
@@ -20,10 +21,35 @@ const PLAYER_WIDTH: f32 = 0.35;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((self::camera::plugin, self::controller::plugin))
+        .init_resource::<PlayerSounds>()
         .add_systems(
             Update,
-            (Player::rotate_model, Player::animate, Player::update_shadow),
+            (
+                Player::rotate_model,
+                Player::animate,
+                Player::update_shadow,
+                Player::play_sounds,
+            ),
         );
+}
+
+#[derive(Resource)]
+struct PlayerSounds {
+    jump: Handle<AudioSource>,
+    coyote_time_jump: Handle<AudioSource>,
+    coyote_friction_jump: Handle<AudioSource>,
+    air_jump: Handle<AudioSource>,
+}
+
+impl FromWorld for PlayerSounds {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            jump: world.load_asset("jump.ogg"),
+            coyote_time_jump: world.load_asset("coyote_time_jump.ogg"),
+            coyote_friction_jump: world.load_asset("coyote_friction_jump.ogg"),
+            air_jump: world.load_asset("air_jump.ogg"),
+        }
+    }
 }
 
 #[derive(Component, Reflect, Default)]
@@ -195,6 +221,33 @@ impl Player {
                 shadow.0.translation.y =
                     -hit.distance - player.3.shape().as_cuboid().unwrap().half_extents.y;
             }
+        }
+    }
+
+    fn play_sounds(
+        player: Single<&Transform, With<Player>>,
+        mut msg: MessageReader<PlayerControllerMessage>,
+        sounds: Res<PlayerSounds>,
+        mut cmd: Commands,
+    ) {
+        for msg in msg.read() {
+            let sound = match msg {
+                PlayerControllerMessage::GroundJump => sounds.jump.clone(),
+                PlayerControllerMessage::CoyoteTimeJump => sounds.coyote_time_jump.clone(),
+                PlayerControllerMessage::CoyoteFrictionJump => sounds.coyote_friction_jump.clone(),
+                PlayerControllerMessage::AirJump => sounds.air_jump.clone(),
+            };
+
+            cmd.spawn((
+                AudioPlayer::new(sound),
+                PlaybackSettings {
+                    mode: PlaybackMode::Despawn,
+                    spatial: true,
+                    volume: Volume::Linear(8.0),
+                    ..default()
+                },
+                player.clone(),
+            ));
         }
     }
 }

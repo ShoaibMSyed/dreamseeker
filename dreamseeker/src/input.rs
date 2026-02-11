@@ -60,6 +60,10 @@ pub mod player {
 
     #[derive(InputAction)]
     #[action_output(bool)]
+    pub struct Walk;
+
+    #[derive(InputAction)]
+    #[action_output(bool)]
     pub struct Jump;
 
     #[derive(InputAction)]
@@ -80,6 +84,10 @@ pub mod player {
 
     pub fn actions() -> impl Bundle {
         actions!(Player[
+            (
+                Action::<Walk>::new(),
+                bindings![KeyCode::ControlLeft],
+            ),
             (
                 Action::<Jump>::new(),
                 bindings![KeyCode::Space, GamepadButton::East],
