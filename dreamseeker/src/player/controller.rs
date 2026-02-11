@@ -5,7 +5,7 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    input::player::{Jump, Move, Slam, Slide},
+    input::player::{Dash, Jump, Move, Slide},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
     util::angle::Angle,
 };
@@ -95,7 +95,7 @@ pub struct PlayerInput {
     pub speed_modifier: f32,
     pub jump: ActionEvents,
     pub slide: ActionEvents,
-    pub slam: ActionEvents,
+    pub dash: ActionEvents,
 }
 
 impl PlayerInput {
@@ -104,7 +104,7 @@ impl PlayerInput {
         camera: Single<&PlayerCamera>,
         jump: Single<&ActionEvents, With<Action<Jump>>>,
         slide: Single<&ActionEvents, With<Action<Slide>>>,
-        slam: Single<&ActionEvents, With<Action<Slam>>>,
+        dash: Single<&ActionEvents, With<Action<Dash>>>,
         movement: Single<&Action<Move>>,
     ) {
         let dir = Vec3::new(movement.x, 0.0, -movement.y)
@@ -128,7 +128,7 @@ impl PlayerInput {
 
         pi.1.jump = **jump;
         pi.1.slide = **slide;
-        pi.1.slam = **slam;
+        pi.1.dash = **dash;
     }
 }
 
@@ -342,7 +342,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         }
 
         // Slam
-        if self.data.settings.slam_enabled && self.data.input.slam.contains(ActionEvents::START) {
+        if self.data.settings.slam_enabled && self.data.input.slide.contains(ActionEvents::START) {
             *self.data.state = PlayerState::Slam(default());
             return;
         }
@@ -350,7 +350,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         // Dash
         if self.data.settings.dash_enabled
             && !state.dashed
-            && self.data.input.slide.contains(ActionEvents::START)
+            && self.data.input.dash.contains(ActionEvents::START)
         {
             state.dashed = true;
 

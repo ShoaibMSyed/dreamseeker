@@ -3,11 +3,13 @@ use avian3d::{
     prelude::{DebugRender, PhysicsDebugPlugin, PhysicsGizmos},
 };
 use bevy::{
+    input::common_conditions::input_toggle_active,
     prelude::*,
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
-use bevy_enhanced_input::EnhancedInputPlugin;
+use bevy_enhanced_input::{EnhancedInputPlugin, prelude::ActionSources};
 use bevy_framepace::FramepacePlugin;
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_skein::SkeinPlugin;
 use dreamseeker_util::DreamSeekerUtil;
 
@@ -25,6 +27,8 @@ fn main() {
             FramepacePlugin,
             DreamSeeker,
             SkeinPlugin::default(),
+            EguiPlugin::default(),
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::KeyG)),
         ))
         .run();
 }
@@ -81,19 +85,30 @@ fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
 }
 
 fn capture_mouse(
+    mut not_first: Local<bool>,
     mut captured: Local<bool>,
     mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
-    buttons: Res<ButtonInput<MouseButton>>,
+    mut actions: ResMut<ActionSources>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
-    if buttons.just_pressed(MouseButton::Left) {
+    if keys.just_pressed(KeyCode::KeyG) || !*not_first {
+        *not_first = true;
         *captured = !*captured;
 
         if *captured {
             cursor.grab_mode = CursorGrabMode::Confined;
             cursor.visible = false;
+            actions.keyboard = true;
+            actions.mouse_buttons = true;
+            actions.mouse_motion = true;
+            actions.mouse_wheel = true;
         } else {
             cursor.grab_mode = CursorGrabMode::None;
             cursor.visible = true;
+            actions.keyboard = false;
+            actions.mouse_buttons = false;
+            actions.mouse_motion = false;
+            actions.mouse_wheel = false;
         }
     }
 }

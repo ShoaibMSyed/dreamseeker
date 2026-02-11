@@ -40,7 +40,7 @@ struct PlayerModel {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(PlayerController, InheritedVisibility)]
+#[require(Name::new("Player"), PlayerController, InheritedVisibility)]
 pub struct Player;
 
 impl Player {

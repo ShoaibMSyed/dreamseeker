@@ -72,7 +72,11 @@ pub mod player {
 
     #[derive(InputAction)]
     #[action_output(bool)]
-    pub struct Slam;
+    pub struct Dash;
+
+    #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Attack;
 
     pub fn actions() -> impl Bundle {
         actions!(Player[
@@ -90,18 +94,24 @@ pub mod player {
             ),
             (
                 Action::<Slide>::new(),
-                bindings![MouseButton::Right, GamepadButton::South],
-            ),
-            (
-                Action::<Slam>::new(),
                 bindings![
                     KeyCode::ShiftLeft,
-                    GamepadButton::RightTrigger2,
-                    (
-                        GamepadAxis::RightZ,
-                        Clamp::pos(),
-                    ),
+                    GamepadButton::South
                 ],
+            ),
+            (
+                Action::<Attack>::new(),
+                bindings![
+                    MouseButton::Left,
+                    GamepadButton::North,
+                ],
+            ),
+            (
+                Action::<Dash>::new(),
+                bindings![
+                    MouseButton::Right,
+                    GamepadButton::West,
+                ]
             )
         ])
     }
