@@ -30,7 +30,7 @@ pub mod camera {
                 Action::<CenterCamera>::new(),
                 Press::default(),
                 bindings![
-                    KeyCode::ShiftLeft,
+                    KeyCode::KeyE,
                     GamepadButton::LeftTrigger2,
                     (
                         GamepadAxis::LeftZ,
@@ -72,6 +72,10 @@ pub mod player {
     #[action_output(bool)]
     pub struct Slide;
 
+    #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Slam;
+
     pub fn actions() -> impl Bundle {
         actions!(Player[
             (
@@ -90,6 +94,17 @@ pub mod player {
                 Action::<Slide>::new(),
                 bindings![MouseButton::Right, GamepadButton::South],
             ),
+            (
+                Action::<Slam>::new(),
+                bindings![
+                    KeyCode::ShiftLeft,
+                    GamepadButton::RightTrigger2,
+                    (
+                        GamepadAxis::RightZ,
+                        Clamp::pos(),
+                    ),
+                ],
+            )
         ])
     }
 }

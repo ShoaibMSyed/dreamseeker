@@ -5,7 +5,7 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    input::player::{Jump, Move, Slide}, player::{PLAYER_HEIGHT, PLAYER_WIDTH}, util::angle::Angle
+    input::player::{Jump, Move, Slam, Slide}, player::{PLAYER_HEIGHT, PLAYER_WIDTH}, util::angle::Angle
 };
 
 use super::{PlayerModel, camera::PlayerCamera};
@@ -27,6 +27,7 @@ pub struct PlayerControllerSettings {
     pub maximum_grounded_up_velocity: f32,
 
     pub coyote_time: f32,
+    pub air_friction: f32,
     pub terminal_velocity: f32,
 
     pub air_jumps: u8,
@@ -41,6 +42,10 @@ pub struct PlayerControllerSettings {
     pub slide_enabled: bool,
     pub slide_speed: f32,
     pub slide_time: f32,
+
+    pub slam_enabled: bool,
+    pub slam_pause: f32,
+    pub slam_velocity: f32,
 }
 
 impl Default for PlayerControllerSettings {
@@ -54,7 +59,8 @@ impl Default for PlayerControllerSettings {
             maximum_grounded_up_velocity: 6.0,
 
             coyote_time: (1.0 / 64.0) * 5.0,
-            terminal_velocity: 10.0,
+            air_friction: 0.3,
+            terminal_velocity: 20.0,
 
             air_jumps: 2,
             air_jump_forward_boost: 4.5,
@@ -68,6 +74,10 @@ impl Default for PlayerControllerSettings {
             slide_enabled: true,
             slide_speed: 7.5,
             slide_time: 0.7,
+
+            slam_enabled: true,
+            slam_pause: 0.5,
+            slam_velocity: 20.0,
         }
     }
 }
@@ -77,6 +87,7 @@ pub struct PlayerInput {
     pub movement: Vec2,
     pub jump: ActionEvents,
     pub slide: ActionEvents,
+    pub slam: ActionEvents,
 }
 
 impl PlayerInput {
@@ -85,6 +96,7 @@ impl PlayerInput {
         camera: Single<&PlayerCamera>,
         jump: Single<&ActionEvents, With<Action<Jump>>>,
         slide: Single<&ActionEvents, With<Action<Slide>>>,
+        slam: Single<&ActionEvents, With<Action<Slam>>>,
         movement: Single<&Action<Move>>,
     ) {
         let dir = Vec3::new(movement.x, 0.0, -movement.y)
@@ -102,6 +114,7 @@ impl PlayerInput {
 
         pi.1.jump = **jump;
         pi.1.slide = **slide;
+        pi.1.slam = **slam;
     }
 }
 
@@ -137,11 +150,17 @@ pub struct SlidingState {
     timer: f32,
 }
 
+#[derive(Reflect, Default)]
+pub struct SlamState {
+    timer: f32,
+}
+
 #[derive(Component, Reflect)]
 pub enum PlayerState {
     Grounded(GroundedState),
     Air(AirState),
     Sliding(SlidingState),
+    Slam(SlamState),
 }
 
 impl Default for PlayerState {
@@ -156,7 +175,7 @@ impl PlayerState {
     }
 
     pub fn facing_locked(&self) -> bool {
-        matches!(self, Self::Sliding(_))
+        matches!(self, Self::Sliding(_) | Self::Slam(_))
     }
 }
 
@@ -254,6 +273,7 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
             PlayerState::Grounded(_) => self.update_grounded(),
             PlayerState::Air(_) => self.update_air(),
             PlayerState::Sliding(_) => self.update_sliding(),
+            PlayerState::Slam(_) => self.update_slam(),
         }
     }
 
@@ -297,6 +317,12 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
             state.jump_state = JumpState::None;
         }
 
+        // Slam
+        if self.data.settings.slam_enabled && self.data.input.slam.contains(ActionEvents::START) {
+            *self.data.state = PlayerState::Slam(default());
+            return;
+        }
+
         // Dash
         if self.data.settings.dash_enabled && !state.dashed && self.data.input.slide.contains(ActionEvents::START) {
             state.dashed = true;
@@ -337,6 +363,8 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         }
 
         self.apply_velocity();
+
+        self.air_friction();
     }
 
     fn update_sliding(&mut self) {
@@ -357,6 +385,41 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         }
 
         self.ground_move();
+    }
+
+    fn update_slam(&mut self) {
+        let PlayerState::Slam(state) = &mut *self.data.state
+        else { return };
+
+        **self.data.velocity = Vec3::ZERO;
+
+        if state.timer < self.data.settings.slam_pause {
+            state.timer += self.dt;
+        }
+
+        if state.timer >= self.data.settings.slam_pause {
+            self.velocity.y = -self.data.settings.slam_velocity;
+        }
+
+        self.apply_velocity();
+    }
+
+    fn air_friction(&mut self) {
+        let speed = self.velocity.xz().length();
+        if speed < 0.01 {
+            self.velocity.x = 0.0;
+            self.velocity.z = 0.0;
+            return;
+        }
+
+        let remove = speed.max(0.1);
+        let remove = self.settings.air_friction * remove * self.dt;
+
+        let new_speed = (speed - remove).max(0.0);
+
+        let new_vel = self.velocity.xz().normalize() * new_speed;
+        self.velocity.x = new_vel.x;
+        self.velocity.z = new_vel.y;
     }
 
     fn ground_jump(&mut self) {
