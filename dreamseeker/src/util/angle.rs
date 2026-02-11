@@ -1,4 +1,7 @@
-use std::{f32::consts::PI, ops::{Add, AddAssign, Sub, SubAssign}};
+use std::{
+    f32::consts::PI,
+    ops::{Add, AddAssign, Sub, SubAssign},
+};
 
 use bevy::reflect::Reflect;
 

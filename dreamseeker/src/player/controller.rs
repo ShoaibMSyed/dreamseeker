@@ -5,7 +5,9 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
-    input::player::{Jump, Move, Slam, Slide}, player::{PLAYER_HEIGHT, PLAYER_WIDTH}, util::angle::Angle
+    input::player::{Jump, Move, Slam, Slide},
+    player::{PLAYER_HEIGHT, PLAYER_WIDTH},
+    util::angle::Angle,
 };
 
 use super::{PlayerModel, camera::PlayerCamera};
@@ -13,7 +15,12 @@ use super::{PlayerModel, camera::PlayerCamera};
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         FixedUpdate,
-        (PlayerInput::gather, PlayerController::step, PlayerController::set_collider).chain(),
+        (
+            PlayerInput::gather,
+            PlayerController::step,
+            PlayerController::set_collider,
+        )
+            .chain(),
     );
 }
 
@@ -32,11 +39,11 @@ pub struct PlayerControllerSettings {
 
     pub air_jumps: u8,
     pub air_jump_forward_boost: f32,
-    
+
     pub dash_enabled: bool,
     pub dash_velocity: f32,
     pub dash_height: f32,
-    
+
     pub run_speed: f32,
 
     pub slide_enabled: bool,
@@ -68,7 +75,7 @@ impl Default for PlayerControllerSettings {
             dash_enabled: true,
             dash_velocity: 10.0,
             dash_height: 0.5,
-            
+
             run_speed: 5.5,
 
             slide_enabled: true,
@@ -85,6 +92,7 @@ impl Default for PlayerControllerSettings {
 #[derive(Component, Reflect, Default)]
 pub struct PlayerInput {
     pub movement: Vec2,
+    pub speed_modifier: f32,
     pub jump: ActionEvents,
     pub slide: ActionEvents,
     pub slam: ActionEvents,
@@ -104,10 +112,16 @@ impl PlayerInput {
             .rotate_y((camera.rotation + Angle::new(std::f32::consts::PI)).get());
         pi.1.movement.x = dir.x;
         pi.1.movement.y = dir.z;
+        pi.1.speed_modifier = movement.length();
+        if pi.1.speed_modifier < 0.3 {
+            pi.1.speed_modifier = 0.0;
+        } else if pi.1.speed_modifier < 0.7 {
+            pi.1.speed_modifier = 0.5;
+        } else {
+            pi.1.speed_modifier = 1.0;
+        }
 
-        if pi.1.movement.length_squared() > 0.0
-            && !pi.2.facing_locked()
-        {
+        if pi.1.movement.length_squared() > 0.0 && !pi.2.facing_locked() {
             let angle = Vec2::new(pi.1.movement.y, pi.1.movement.x).to_angle();
             pi.0.facing = Angle::new(angle);
         }
@@ -187,7 +201,7 @@ impl PlayerState {
     CustomPositionIntegration,
     PlayerInput,
     PlayerState,
-    PlayerControllerSettings,
+    PlayerControllerSettings
 )]
 pub struct PlayerController {
     pub facing: Angle,
@@ -204,7 +218,15 @@ impl PlayerController {
 
     fn set_collider(
         mut sliding: Local<bool>,
-        mut player: Single<(&PlayerState, &mut Collider, &mut Transform, &mut PlayerController), Changed<PlayerState>>,
+        mut player: Single<
+            (
+                &PlayerState,
+                &mut Collider,
+                &mut Transform,
+                &mut PlayerController,
+            ),
+            Changed<PlayerState>,
+        >,
         mut model: Single<&mut Transform, (With<PlayerModel>, Without<PlayerState>)>,
     ) {
         let last_sliding = *sliding;
@@ -278,19 +300,20 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
     }
 
     fn update_grounded(&mut self) {
-        let PlayerState::Grounded(GroundedState) = &mut *self.data.state
-        else { return };
+        let PlayerState::Grounded(GroundedState) = &mut *self.data.state else {
+            return;
+        };
 
-        self.velocity.x = self.input.movement.x * self.settings.run_speed;
-        self.velocity.z = self.input.movement.y * self.settings.run_speed;
+        self.velocity.x =
+            self.input.movement.x * self.input.speed_modifier * self.settings.run_speed;
+        self.velocity.z =
+            self.input.movement.y * self.input.speed_modifier * self.settings.run_speed;
 
         self.ground_move();
 
         if self.input.jump.contains(ActionEvents::START) {
             self.ground_jump();
-        } else if self.input.slide.contains(ActionEvents::START)
-            && self.settings.slide_enabled
-        {
+        } else if self.input.slide.contains(ActionEvents::START) && self.settings.slide_enabled {
             let dir = Vec2::from_angle(self.pc.facing.get());
             *self.state = PlayerState::Sliding(SlidingState {
                 direction: Vec2::new(dir.y, dir.x),
@@ -300,8 +323,9 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
     }
 
     fn update_air(&mut self) {
-        let PlayerState::Air(state) = &mut *self.data.state
-        else { return };
+        let PlayerState::Air(state) = &mut *self.data.state else {
+            return;
+        };
 
         state.coyote_countdown = (state.coyote_countdown - self.dt).max(0.0);
 
@@ -324,7 +348,10 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         }
 
         // Dash
-        if self.data.settings.dash_enabled && !state.dashed && self.data.input.slide.contains(ActionEvents::START) {
+        if self.data.settings.dash_enabled
+            && !state.dashed
+            && self.data.input.slide.contains(ActionEvents::START)
+        {
             state.dashed = true;
 
             let dir = Vec2::from_angle(self.data.pc.facing.get());
@@ -335,7 +362,8 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
 
             let boost = (self.data.settings.dash_velocity - speed_towards_dir).max(0.0);
             self.data.velocity.0 += dir * boost;
-            self.data.velocity.y = (2.0 * self.data.settings.gravity * self.data.settings.dash_height).sqrt();
+            self.data.velocity.y =
+                (2.0 * self.data.settings.gravity * self.data.settings.dash_height).sqrt();
         }
 
         if state.air_jumps < self.data.settings.air_jumps
@@ -343,13 +371,18 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
         {
             if state.coyote_countdown <= 0.0 {
                 // Air Jump
-                self.data.velocity.y = (2.0 * self.data.settings.gravity * self.data.settings.jump).sqrt();
+                self.data.velocity.y =
+                    (2.0 * self.data.settings.gravity * self.data.settings.jump).sqrt();
                 state.air_jumps += 1;
                 state.jump_state = JumpState::Normal;
 
                 // Forward Boost
 
-                if let Ok(dir) = Dir3::new(vec3(self.data.input.movement.x, 0.0, self.data.input.movement.y)) {
+                if let Ok(dir) = Dir3::new(vec3(
+                    self.data.input.movement.x,
+                    0.0,
+                    self.data.input.movement.y,
+                )) {
                     let hvel = vec3(self.data.velocity.x, 0.0, self.data.velocity.z);
                     let speed_towards_dir = speed_towards_dir(hvel, dir);
 
@@ -368,8 +401,9 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
     }
 
     fn update_sliding(&mut self) {
-        let PlayerState::Sliding(state) = &mut *self.data.state
-        else { return };
+        let PlayerState::Sliding(state) = &mut *self.data.state else {
+            return;
+        };
 
         state.timer += self.dt;
 
@@ -388,8 +422,9 @@ impl<'a, 'w, 's, 'w2, 's2> Mover<'a, 'w, 's, 'w2, 's2> {
     }
 
     fn update_slam(&mut self) {
-        let PlayerState::Slam(state) = &mut *self.data.state
-        else { return };
+        let PlayerState::Slam(state) = &mut *self.data.state else {
+            return;
+        };
 
         **self.data.velocity = Vec3::ZERO;
 

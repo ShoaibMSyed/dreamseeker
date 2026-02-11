@@ -1,5 +1,11 @@
-use avian3d::{PhysicsPlugins, prelude::{DebugRender, PhysicsDebugPlugin, PhysicsGizmos}};
-use bevy::{prelude::*, window::{CursorGrabMode, CursorOptions, PrimaryWindow}};
+use avian3d::{
+    PhysicsPlugins,
+    prelude::{DebugRender, PhysicsDebugPlugin, PhysicsGizmos},
+};
+use bevy::{
+    prelude::*,
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+};
 use bevy_enhanced_input::EnhancedInputPlugin;
 use bevy_framepace::FramepacePlugin;
 use bevy_skein::SkeinPlugin;
@@ -13,12 +19,14 @@ mod trigger;
 mod util;
 
 fn main() {
-    App::new().add_plugins((
-        DefaultPlugins,
-        FramepacePlugin,
-        DreamSeeker,
-        SkeinPlugin::default(),
-    )).run();
+    App::new()
+        .add_plugins((
+            DefaultPlugins,
+            FramepacePlugin,
+            DreamSeeker,
+            SkeinPlugin::default(),
+        ))
+        .run();
 }
 
 struct DreamSeeker;
@@ -35,20 +43,17 @@ impl Plugin for DreamSeeker {
             self::trigger::plugin,
         ));
 
-        *app.world_mut().resource_mut::<GizmoConfigStore>()
+        *app.world_mut()
+            .resource_mut::<GizmoConfigStore>()
             .config_mut::<PhysicsGizmos>()
             .1 = PhysicsGizmos::none();
 
-        app
-            .add_systems(Startup, setup)
+        app.add_systems(Startup, setup)
             .add_systems(Update, capture_mouse);
     }
 }
 
-fn setup(
-    mut cmd: Commands,
-    assets: Res<AssetServer>,
-) {
+fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
     cmd.insert_resource(GlobalAmbientLight {
         brightness: 200.0,
         ..default()
@@ -64,7 +69,11 @@ fn setup(
 
     cmd.spawn(PlayerCamera::bundle());
 
-    cmd.spawn((Player::bundle(), DebugRender::default(), Transform::from_xyz(0.0, 3.0, 0.0)));
+    cmd.spawn((
+        Player::bundle(),
+        DebugRender::none(),
+        Transform::from_xyz(0.0, 3.0, 0.0),
+    ));
 
     // Spawn Terrain
 

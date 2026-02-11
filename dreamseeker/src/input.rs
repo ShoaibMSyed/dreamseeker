@@ -4,21 +4,19 @@ use bevy_enhanced_input::prelude::InputContextAppExt;
 use crate::player::{Player, camera::PlayerCamera};
 
 pub(super) fn plugin(app: &mut App) {
-    app
-        .add_input_context_to::<FixedPreUpdate, Player>()
+    app.add_input_context_to::<FixedPreUpdate, Player>()
         .add_input_context::<PlayerCamera>();
 }
 
 pub mod camera {
     use bevy::prelude::*;
-    use bevy_enhanced_input::prelude::{*, Press};
+    use bevy_enhanced_input::prelude::{Press, *};
 
     use crate::player::camera::PlayerCamera;
 
     #[derive(InputAction)]
     #[action_output(bool)]
     pub struct CenterCamera;
-
 
     #[derive(InputAction)]
     #[action_output(Vec2)]

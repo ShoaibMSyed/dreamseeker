@@ -111,7 +111,9 @@ where
         std::iter::empty()
     }
 
-    fn get_component_ids(_components: &bevy::ecs::component::Components) -> impl Iterator<Item = Option<bevy::ecs::component::ComponentId>> {
+    fn get_component_ids(
+        _components: &bevy::ecs::component::Components,
+    ) -> impl Iterator<Item = Option<bevy::ecs::component::ComponentId>> {
         std::iter::empty()
     }
 }

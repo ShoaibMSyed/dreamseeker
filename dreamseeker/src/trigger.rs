@@ -28,11 +28,7 @@ fn check_collisions(
 
 #[derive(Component, Reflect, Clone)]
 #[reflect(Component, Default)]
-#[require(
-    Transform,
-    Sensor,
-    CollisionEventsEnabled,
-)]
+#[require(Transform, Sensor, CollisionEventsEnabled)]
 pub struct TriggerTeleport(pub Vec3);
 
 impl Default for TriggerTeleport {
@@ -48,8 +44,9 @@ impl TriggerTeleport {
         mut player: Query<&mut Transform, With<Player>>,
     ) {
         let this = q.get(this).unwrap();
-        let Ok(mut transform) = player.get_mut(entity)
-        else { return };
+        let Ok(mut transform) = player.get_mut(entity) else {
+            return;
+        };
 
         transform.translation = this.0;
     }

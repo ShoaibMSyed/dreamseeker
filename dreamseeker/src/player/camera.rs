@@ -1,11 +1,14 @@
 use std::f32::consts::PI;
 
 use avian3d::prelude::{Collider, LinearVelocity};
-use bevy::prelude::*;
+use bevy::{anti_alias::fxaa::Fxaa, core_pipeline::prepass::DepthPrepass, prelude::*};
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
 
-use crate::{input::camera::{CenterCamera, MoveCamera}, util::angle::{Angle, AsAngle}};
+use crate::{
+    input::camera::{CenterCamera, MoveCamera},
+    util::angle::{Angle, AsAngle},
+};
 
 use super::{PLAYER_HEIGHT, Player, controller::PlayerController};
 
@@ -27,12 +30,16 @@ const PLAYER_SPEED_FAST: f32 = 9.0;
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
-        (PlayerCamera::system, PlayerCamera::follow_player, PlayerCamera::set_fov),
+        (
+            PlayerCamera::system,
+            PlayerCamera::follow_player,
+            PlayerCamera::set_fov,
+        ),
     );
 }
 
 #[derive(Component, Reflect)]
-#[require(Camera3d)]
+#[require(Camera3d, DepthPrepass, Msaa::Off, Fxaa)]
 pub struct PlayerCamera {
     pub zoom: f32,
 
@@ -66,10 +73,7 @@ impl PlayerCamera {
                 fov: MIN_FOV,
                 ..default()
             }),
-            observers![
-                Self::on_center,
-                Self::on_move,
-            ],
+            observers![Self::on_center, Self::on_move,],
         )
     }
 
@@ -105,7 +109,7 @@ impl PlayerCamera {
         if self.visual_rotation == self.rotation {
             return;
         }
-        
+
         let step = self.visual_speed * dt;
 
         let old = self.visual_rotation.get();
@@ -149,10 +153,7 @@ impl PlayerCamera {
         camera.apply(event.value, time.delta_secs());
     }
 
-    fn system(
-        mut camera: Single<&mut PlayerCamera>,
-        time: Res<Time>,
-    ) {
+    fn system(mut camera: Single<&mut PlayerCamera>, time: Res<Time>) {
         camera.update(time.delta_secs());
     }
 
@@ -162,7 +163,8 @@ impl PlayerCamera {
         player: Single<(&Transform, &Collider), With<Player>>,
         time: Res<Time>,
     ) {
-        let target = player.0.translation + Vec3::Y * (-player.1.shape().as_cuboid().unwrap().half_extents.y + PLAYER_HEIGHT);
+        let target = player.0.translation
+            + Vec3::Y * (-player.1.shape().as_cuboid().unwrap().half_extents.y + PLAYER_HEIGHT);
 
         let pp = *player_pos;
         *player_pos += (target - pp) * (1.0 - f32::exp(-FOLLOW_SPEED * time.delta_secs()));
@@ -177,8 +179,9 @@ impl PlayerCamera {
         mut camera: Single<&mut Projection, With<PlayerCamera>>,
         time: Res<Time>,
     ) {
-        let Projection::Perspective(proj) = &mut **camera
-        else { return };
+        let Projection::Perspective(proj) = &mut **camera else {
+            return;
+        };
 
         let interval = PLAYER_SPEED_FAST - PLAYER_SPEED_SLOW;
         let percent = ((player.xz().length() - PLAYER_SPEED_SLOW) / interval).clamp(0.0, 1.0);
@@ -187,7 +190,7 @@ impl PlayerCamera {
         let target_fov = MIN_FOV + fov_interval * percent;
 
         *fov += (target_fov - *fov) * (1.0 - f32::exp(-FOV_SPEED * time.delta_secs()));
-        
+
         proj.fov = *fov;
     }
 }

@@ -1,10 +1,17 @@
-use bevy::{ecs::{lifecycle::HookContext, world::DeferredWorld}, prelude::*};
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 
 #[derive(Component)]
 #[component(on_insert)]
-struct AddAssetInternal<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static>(Option<(A, F)>);
+struct AddAssetInternal<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static>(
+    Option<(A, F)>,
+);
 
-impl<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static> AddAssetInternal<A, C, F> {
+impl<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static>
+    AddAssetInternal<A, C, F>
+{
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
         let (asset, constructor) = world.get_mut::<Self>(ctx.entity).unwrap().0.take().unwrap();
 
@@ -15,7 +22,10 @@ impl<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static> 
 }
 
 #[allow(non_snake_case)]
-pub fn AddAsset<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static>(asset: A, constructor: F) -> impl Bundle {
+pub fn AddAsset<A: Asset, C: Component, F: FnOnce(Handle<A>) -> C + Send + Sync + 'static>(
+    asset: A,
+    constructor: F,
+) -> impl Bundle {
     AddAssetInternal(Some((asset, constructor)))
 }
 
