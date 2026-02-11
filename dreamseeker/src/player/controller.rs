@@ -451,7 +451,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             }
         }
 
-        self.apply_velocity();
+        self.apply_velocity(|_| {});
 
         self.air_friction();
     }
@@ -492,7 +492,19 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             self.velocity.y = -self.data.settings.slam_velocity;
         }
 
-        self.apply_velocity();
+        let min_floor_angle = self.settings.min_floor_angle;
+
+        let mut hit_point = None;
+
+        self.apply_velocity(|hit| {
+            if hit.normal.y >= min_floor_angle {
+                hit_point = Some(hit.point);
+            }
+        });
+
+        if let Some(hit_point) = hit_point {
+            self.msg.write(PlayerControllerMessage::Slam(hit_point));
+        }
     }
 
     fn air_friction(&mut self) {
@@ -603,7 +615,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         let start_pos = self.transform.translation;
         let start_vel = self.velocity.0;
 
-        if self.apply_velocity() {
+        if self.apply_velocity(|_| {}) {
             return;
         }
 
@@ -631,7 +643,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         self.transform.translation.y += stepped_up;
 
-        self.apply_velocity();
+        self.apply_velocity(|_| {});
 
         let snap_down = self.mas.cast_move(
             &self.collider,
@@ -672,7 +684,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
     }
 
     /// Returns true if the velocity was applied unimpeded
-    fn apply_velocity(&mut self) -> bool {
+    fn apply_velocity(&mut self, mut hit_callback: impl FnMut(&mut MoveAndSlideHitData)) -> bool {
         let mut unimpeded = true;
 
         let MoveAndSlideOutput {
@@ -693,8 +705,10 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 ..default()
             },
             &self.filter,
-            |_hit| {
+            |mut hit| {
                 unimpeded = false;
+
+                hit_callback(&mut hit);
 
                 MoveAndSlideHitResponse::Accept
             },
@@ -718,10 +732,11 @@ fn speed_towards_dir(speed: Vec3, dir: Dir3) -> f32 {
     }
 }
 
-#[derive(Message, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Message, Clone, PartialEq)]
 pub enum PlayerControllerMessage {
     GroundJump,
     CoyoteTimeJump,
     CoyoteFrictionJump,
     AirJump,
+    Slam(Vec3),
 }

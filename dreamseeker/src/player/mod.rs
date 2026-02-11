@@ -236,6 +236,7 @@ impl Player {
                 PlayerControllerMessage::CoyoteTimeJump => sounds.coyote_time_jump.clone(),
                 PlayerControllerMessage::CoyoteFrictionJump => sounds.coyote_friction_jump.clone(),
                 PlayerControllerMessage::AirJump => sounds.air_jump.clone(),
+                _ => continue,
             };
 
             cmd.spawn((
