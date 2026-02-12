@@ -14,9 +14,12 @@ use dreamseeker_util::{construct::Make, observers};
 
 use crate::input::player::Attack;
 
-use self::{controller::{
-    PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
-}, sword::Sword};
+use self::{
+    controller::{
+        PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
+    },
+    sword::Sword,
+};
 
 pub mod camera;
 mod controller;
@@ -167,7 +170,9 @@ impl Player {
     ) -> Result {
         let mut model = model.get_mut(event.entity)?;
         for child in children.iter_descendants(event.entity) {
-            if let Ok(name) = names.get(child) && name.as_str() == "Hand.R" {
+            if let Ok(name) = names.get(child)
+                && name.as_str() == "Hand.R"
+            {
                 cmd.spawn((
                     Sword::bundle(),
                     ChildOf(child),
@@ -175,7 +180,7 @@ impl Player {
                         .with_rotation(Quat::from_axis_angle(Vec3::Z, -PI / 2.0)),
                 ));
             }
-            
+
             let Ok(mut aplayer) = aplayer.get_mut(child) else {
                 continue;
             };

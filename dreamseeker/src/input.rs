@@ -80,6 +80,10 @@ pub mod player {
 
     #[derive(InputAction)]
     #[action_output(bool)]
+    pub struct WallRun;
+
+    #[derive(InputAction)]
+    #[action_output(bool)]
     pub struct Attack;
 
     pub fn actions() -> impl Bundle {
@@ -120,7 +124,18 @@ pub mod player {
                     MouseButton::Right,
                     GamepadButton::West,
                 ]
-            )
+            ),
+            (
+                Action::<WallRun>::new(),
+                bindings![
+                    KeyCode::KeyF,
+                    GamepadButton::RightTrigger2,
+                    (
+                        GamepadAxis::RightZ,
+                        Clamp::pos(),
+                    ),
+                ]
+            ),
         ])
     }
 }

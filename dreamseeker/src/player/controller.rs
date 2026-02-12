@@ -6,7 +6,7 @@ use bevy_enhanced_input::prelude::*;
 
 use crate::{
     collision::GameLayer,
-    input::player::{Dash, Jump, Move, Slide, Walk},
+    input::player::{Dash, Jump, Move, Slide, Walk, WallRun},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
     util::angle::Angle,
 };
@@ -56,6 +56,10 @@ pub struct PlayerControllerSettings {
     pub slam_enabled: bool,
     pub slam_pause: f32,
     pub slam_velocity: f32,
+
+    pub wall_run_enabled: bool,
+    pub wall_run_min_normal: f32,
+    pub wall_run_max_normal: f32,
 }
 
 impl Default for PlayerControllerSettings {
@@ -89,6 +93,10 @@ impl Default for PlayerControllerSettings {
             slam_enabled: true,
             slam_pause: 0.5,
             slam_velocity: 20.0,
+
+            wall_run_enabled: true,
+            wall_run_min_normal: -0.1,
+            wall_run_max_normal: 0.6,
         }
     }
 }
@@ -100,6 +108,7 @@ pub struct PlayerInput {
     pub jump: ActionEvents,
     pub slide: ActionEvents,
     pub dash: ActionEvents,
+    pub wall_run: ActionEvents,
 }
 
 impl PlayerInput {
@@ -110,6 +119,7 @@ impl PlayerInput {
         jump: Single<&ActionEvents, With<Action<Jump>>>,
         slide: Single<&ActionEvents, With<Action<Slide>>>,
         dash: Single<&ActionEvents, With<Action<Dash>>>,
+        wall_run: Single<&ActionEvents, With<Action<WallRun>>>,
         movement: Single<&Action<Move>>,
     ) {
         let dir = Vec3::new(movement.x, 0.0, -movement.y)
@@ -134,6 +144,7 @@ impl PlayerInput {
         pi.1.jump = **jump;
         pi.1.slide = **slide;
         pi.1.dash = **dash;
+        pi.1.wall_run = **wall_run;
     }
 }
 
@@ -392,6 +403,13 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         if state.jump_state != JumpState::None && self.data.velocity.y <= 0.0 {
             state.jump_state = JumpState::None;
+        }
+
+        // Wall Run
+        if self.data.settings.wall_run_enabled
+            && self.data.input.wall_run.contains(ActionEvents::FIRE)
+        {
+            todo!()
         }
 
         // Slam
