@@ -9,7 +9,10 @@ use bevy::{
     prelude::*,
     scene::SceneInstanceReady,
 };
+use bevy_enhanced_input::prelude::Start;
 use dreamseeker_util::{construct::Make, observers};
+
+use crate::input::player::Attack;
 
 use self::{controller::{
     PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
@@ -68,6 +71,7 @@ struct PlayerModel {
     walk: AnimationNodeIndex,
     jump: AnimationNodeIndex,
     fall: AnimationNodeIndex,
+    swing: AnimationNodeIndex,
     aplayer: Option<Entity>,
 }
 
@@ -83,6 +87,7 @@ impl Player {
             // AddMesh(Cuboid::new(0.5, 1.5, 0.5)),
             // AddMaterial(Color::linear_rgb(0.1, 0.3, 0.8)),
             Collider::cuboid(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH),
+            observers![Self::on_attack],
             children![
                 (
                     Make(Self::make_model),
@@ -99,6 +104,22 @@ impl Player {
         )
     }
 
+    fn on_attack(
+        _: On<Start<Attack>>,
+        model: Single<&PlayerModel>,
+        mut aplayer: Query<&mut AnimationPlayer>,
+    ) -> Result {
+        let Some(aplayer_entity) = model.aplayer else {
+            return Ok(());
+        };
+
+        let mut aplayer = aplayer.get_mut(aplayer_entity)?;
+
+        aplayer.play(model.swing);
+
+        Ok(())
+    }
+
     fn make_model(
         assets: Res<AssetServer>,
         mut graphs: ResMut<Assets<AnimationGraph>>,
@@ -110,9 +131,10 @@ impl Player {
         model.run = graph.add_clip(assets.load("player.glb#Animation3"), 1.0, graph.root);
         model.slide_start = graph.add_clip(assets.load("player.glb#Animation5"), 1.0, graph.root);
         model.slide = graph.add_clip(assets.load("player.glb#Animation4"), 1.0, graph.root);
-        model.walk = graph.add_clip(assets.load("player.glb#Animation6"), 1.0, graph.root);
+        model.walk = graph.add_clip(assets.load("player.glb#Animation7"), 1.0, graph.root);
         model.fall = graph.add_clip(assets.load("player.glb#Animation0"), 1.0, graph.root);
         model.jump = graph.add_clip(assets.load("player.glb#Animation2"), 1.0, graph.root);
+        model.swing = graph.add_clip(assets.load("player.glb#Animation6"), 1.0, graph.root);
 
         model.graph = graphs.add(graph);
 
@@ -231,6 +253,12 @@ impl Player {
             if !aplayer.is_playing_animation(model.run) {
                 aplayer.stop_all();
                 aplayer.play(model.run).repeat();
+            }
+        }
+
+        if let Some(anim) = aplayer.animation(model.swing) {
+            if anim.is_finished() {
+                aplayer.stop(model.swing);
             }
         }
 
