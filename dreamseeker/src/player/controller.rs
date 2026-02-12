@@ -207,6 +207,7 @@ impl PlayerState {
     CollisionLayers::new(GameLayer::Player, LayerMask::ALL),
     TransformInterpolation,
     CustomPositionIntegration,
+    SleepingDisabled,
     PlayerInput,
     PlayerState,
     PlayerControllerSettings

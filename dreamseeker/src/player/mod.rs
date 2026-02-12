@@ -11,12 +11,13 @@ use bevy::{
 };
 use dreamseeker_util::{construct::Make, observers};
 
-use self::controller::{
+use self::{controller::{
     PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
-};
+}, sword::Sword};
 
 pub mod camera;
 mod controller;
+mod sword;
 
 const PLAYER_HEIGHT: f32 = 1.7;
 const PLAYER_WIDTH: f32 = 0.35;
@@ -86,7 +87,7 @@ impl Player {
                 (
                     Make(Self::make_model),
                     Transform::from_xyz(0.0, -PLAYER_HEIGHT / 2.0, 0.0),
-                    observers![Self::on_scene_ready]
+                    observers![Self::setup_animations],
                 ),
                 (
                     ForwardDecal,
@@ -134,15 +135,25 @@ impl Player {
         })))
     }
 
-    fn on_scene_ready(
+    fn setup_animations(
         event: On<SceneInstanceReady>,
         mut model: Query<&mut PlayerModel>,
         children: Query<&Children>,
+        names: Query<&Name>,
         mut aplayer: Query<&mut AnimationPlayer>,
         mut cmd: Commands,
     ) -> Result {
         let mut model = model.get_mut(event.entity)?;
         for child in children.iter_descendants(event.entity) {
+            if let Ok(name) = names.get(child) && name.as_str() == "Hand.R" {
+                cmd.spawn((
+                    Sword::bundle(),
+                    ChildOf(child),
+                    Transform::from_xyz(0.1, 0.2, 0.0)
+                        .with_rotation(Quat::from_axis_angle(Vec3::Z, -PI / 2.0)),
+                ));
+            }
+            
             let Ok(mut aplayer) = aplayer.get_mut(child) else {
                 continue;
             };
