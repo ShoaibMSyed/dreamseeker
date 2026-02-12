@@ -1,7 +1,8 @@
 use std::f32::consts::PI;
 
 use avian3d::prelude::{
-    Collider, LinearVelocity, ShapeCastConfig, SpatialQuery, SpatialQueryFilter,
+    Collider, CollisionStart, DebugRender, LinearVelocity, ShapeCastConfig, SpatialQuery,
+    SpatialQueryFilter,
 };
 use bevy::{
     audio::{PlaybackMode, Volume},
@@ -16,7 +17,7 @@ use crate::input::player::Attack;
 
 use self::{
     controller::{
-        PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
+        JumpState, PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
     },
     sword::Sword,
 };
@@ -38,6 +39,7 @@ pub(super) fn plugin(app: &mut App) {
                 Player::animate,
                 Player::update_shadow,
                 Player::play_sounds,
+                Player::update_attack_state,
             ),
         );
 }
@@ -74,18 +76,30 @@ struct PlayerModel {
     walk: AnimationNodeIndex,
     jump: AnimationNodeIndex,
     fall: AnimationNodeIndex,
-    swing: AnimationNodeIndex,
+    spin: AnimationNodeIndex,
+    slash: AnimationNodeIndex,
+    slam: AnimationNodeIndex,
     aplayer: Option<Entity>,
+}
+
+#[derive(Reflect, Default, PartialEq, Eq)]
+enum AttackState {
+    #[default]
+    None,
+    Spin,
+    Normal,
 }
 
 #[derive(Component, Reflect, Default)]
 #[require(Name::new("Player"), PlayerController, InheritedVisibility)]
-pub struct Player;
+pub struct Player {
+    attack_state: AttackState,
+}
 
 impl Player {
     pub fn bundle() -> impl Bundle {
         (
-            Self,
+            Self::default(),
             crate::input::player::actions(),
             // AddMesh(Cuboid::new(0.5, 1.5, 0.5)),
             // AddMaterial(Color::linear_rgb(0.1, 0.3, 0.8)),
@@ -107,18 +121,15 @@ impl Player {
         )
     }
 
-    fn on_attack(
-        _: On<Start<Attack>>,
-        model: Single<&PlayerModel>,
-        mut aplayer: Query<&mut AnimationPlayer>,
-    ) -> Result {
-        let Some(aplayer_entity) = model.aplayer else {
-            return Ok(());
-        };
-
-        let mut aplayer = aplayer.get_mut(aplayer_entity)?;
-
-        aplayer.play(model.swing);
+    fn on_attack(_: On<Start<Attack>>, mut player: Single<(&mut Player, &PlayerState)>) -> Result {
+        if player.0.attack_state == AttackState::None && matches!(player.1, PlayerState::Air(_)) {
+            player.0.attack_state = AttackState::Spin;
+        }
+        if player.0.attack_state == AttackState::None
+            && matches!(player.1, PlayerState::Grounded(_))
+        {
+            player.0.attack_state = AttackState::Normal;
+        }
 
         Ok(())
     }
@@ -130,14 +141,24 @@ impl Player {
         let mut model = PlayerModel::default();
 
         let mut graph = AnimationGraph::new();
-        model.idle = graph.add_clip(assets.load("player.glb#Animation1"), 1.0, graph.root);
-        model.run = graph.add_clip(assets.load("player.glb#Animation3"), 1.0, graph.root);
-        model.slide_start = graph.add_clip(assets.load("player.glb#Animation5"), 1.0, graph.root);
-        model.slide = graph.add_clip(assets.load("player.glb#Animation4"), 1.0, graph.root);
-        model.walk = graph.add_clip(assets.load("player.glb#Animation7"), 1.0, graph.root);
-        model.fall = graph.add_clip(assets.load("player.glb#Animation0"), 1.0, graph.root);
-        model.jump = graph.add_clip(assets.load("player.glb#Animation2"), 1.0, graph.root);
-        model.swing = graph.add_clip(assets.load("player.glb#Animation6"), 1.0, graph.root);
+
+        let mut load = |i| {
+            graph.add_clip(
+                assets.load(format!("player.glb#Animation{i}")),
+                1.0,
+                graph.root,
+            )
+        };
+        model.idle = load(1);
+        model.run = load(3);
+        model.slide_start = load(7);
+        model.slide = load(6);
+        model.walk = load(9);
+        model.fall = load(0);
+        model.jump = load(2);
+        model.spin = load(8);
+        model.slash = load(5);
+        model.slam = load(4);
 
         model.graph = graphs.add(graph);
 
@@ -178,6 +199,8 @@ impl Player {
                     ChildOf(child),
                     Transform::from_xyz(0.1, 0.2, 0.0)
                         .with_rotation(Quat::from_axis_angle(Vec3::Z, -PI / 2.0)),
+                    DebugRender::default(),
+                    observers![Self::on_sword_collision],
                 ));
             }
 
@@ -205,11 +228,12 @@ impl Player {
     }
 
     fn animate(
-        player: Single<(
+        mut player: Single<(
             &PlayerController,
             &PlayerState,
             &LinearVelocity,
             &PlayerControllerSettings,
+            &mut Player,
         )>,
         model: Single<&PlayerModel>,
         mut aplayer: Query<&mut AnimationPlayer>,
@@ -219,7 +243,26 @@ impl Player {
         };
 
         let mut aplayer = aplayer.get_mut(aplayer_entity)?;
-        if matches!(player.1, PlayerState::Air(_)) {
+        if matches!(player.4.attack_state, AttackState::Normal) {
+            if let Some(anim) = aplayer.animation(model.slash)
+                && anim.is_finished()
+            {
+                player.4.attack_state = AttackState::None;
+                aplayer.stop(model.slash);
+            } else if !aplayer.is_playing_animation(model.slash) {
+                // aplayer.stop_all();
+                aplayer.play(model.slash);
+            }
+        } else if matches!(player.4.attack_state, AttackState::Spin) {
+            if let Some(anim) = aplayer.animation(model.spin)
+                && anim.is_finished()
+            {
+                player.4.attack_state = AttackState::None;
+            } else if !aplayer.is_playing_animation(model.spin) {
+                aplayer.stop_all();
+                aplayer.play(model.spin);
+            }
+        } else if matches!(player.1, PlayerState::Air(_)) {
             if player.2.y > 0.0 {
                 if !aplayer.is_playing_animation(model.jump) {
                     aplayer.stop_all();
@@ -230,6 +273,11 @@ impl Player {
                     aplayer.stop_all();
                     aplayer.play(model.fall).repeat();
                 }
+            }
+        } else if matches!(player.1, PlayerState::Slam(_)) {
+            if !aplayer.is_playing_animation(model.slam) {
+                aplayer.stop_all();
+                aplayer.play(model.slam);
             }
         } else if player.2.xz().length_squared() == 0.0 {
             if !aplayer.is_playing_animation(model.idle) {
@@ -261,9 +309,9 @@ impl Player {
             }
         }
 
-        if let Some(anim) = aplayer.animation(model.swing) {
+        if let Some(anim) = aplayer.animation(model.spin) {
             if anim.is_finished() {
-                aplayer.stop(model.swing);
+                aplayer.stop(model.spin);
             }
         }
 
@@ -325,6 +373,36 @@ impl Player {
                 },
                 player.clone(),
             ));
+        }
+    }
+
+    fn update_attack_state(mut player: Single<(&mut Player, &PlayerState)>) {
+        if player.0.attack_state == AttackState::Spin && player.1.grounded() {
+            player.0.attack_state = AttackState::None;
+        }
+        if player.0.attack_state == AttackState::Normal && !player.1.grounded() {
+            player.0.attack_state = AttackState::None;
+        }
+    }
+
+    fn on_sword_collision(
+        _: On<CollisionStart>,
+        mut player: Single<(
+            &mut Player,
+            &mut LinearVelocity,
+            &PlayerControllerSettings,
+            &mut PlayerState,
+        )>,
+    ) {
+        if player.0.attack_state == AttackState::Spin
+            && player.1.y < player.2.min_sword_bounce
+            && let PlayerState::Air(state) = &mut *player.3
+        {
+            state.air_jumps = 0;
+            state.dashed = false;
+            state.jump_state = JumpState::None;
+
+            player.1.y = (-player.1.y).max(player.2.min_sword_bounce);
         }
     }
 }

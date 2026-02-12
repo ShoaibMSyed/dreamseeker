@@ -5,4 +5,6 @@ pub enum GameLayer {
     #[default]
     Level,
     Player,
+    Bouncy,
+    Sword,
 }

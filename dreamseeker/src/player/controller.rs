@@ -6,7 +6,7 @@ use bevy_enhanced_input::prelude::*;
 
 use crate::{
     collision::GameLayer,
-    input::player::{Dash, Jump, Move, Slide, Walk, WallRun},
+    input::player::{Dash, Jump, Move, Slide, Walk, WallGrab},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
     util::angle::Angle,
 };
@@ -38,6 +38,9 @@ pub struct PlayerControllerSettings {
     pub air_friction: f32,
     pub terminal_velocity: f32,
 
+    pub air_speed: f32,
+    pub air_accel: f32,
+
     pub air_jumps: u8,
     pub air_jump_forward_boost: f32,
 
@@ -57,19 +60,17 @@ pub struct PlayerControllerSettings {
     pub slam_pause: f32,
     pub slam_velocity: f32,
 
-    pub wall_run_enabled: bool,
-    pub wall_run_min_normal: f32,
-    pub wall_run_max_normal: f32,
-    pub wall_run_max_wall_distance: f32,
-    pub wall_run_gravity_factor: f32,
-    /// Maximum Y velocity under which wall run gravity is active
-    pub wall_run_gravity_maximum_velocity: f32,
-    pub wall_run_speed: f32,
-    pub wall_run_max_angle_change: f32,
+    pub wall_grab_enabled: bool,
+    pub wall_grab_min_normal: f32,
+    pub wall_grab_max_normal: f32,
+    pub wall_grab_max_wall_distance: f32,
+    pub wall_grab_max_away_velocity: f32,
 
     pub wall_jump_add_vertical: f32,
     pub wall_jump_max_vertical: f32,
     pub wall_jump_add_horizontal: f32,
+
+    pub min_sword_bounce: f32,
 }
 
 impl Default for PlayerControllerSettings {
@@ -85,6 +86,9 @@ impl Default for PlayerControllerSettings {
             coyote_time: (1.0 / 64.0) * 5.0,
             air_friction: 0.3,
             terminal_velocity: 20.0,
+
+            air_speed: 5.5,
+            air_accel: 8.0,
 
             air_jumps: 2,
             air_jump_forward_boost: 4.5,
@@ -104,18 +108,17 @@ impl Default for PlayerControllerSettings {
             slam_pause: 0.5,
             slam_velocity: 20.0,
 
-            wall_run_enabled: true,
-            wall_run_min_normal: -0.1,
-            wall_run_max_normal: 0.6,
-            wall_run_max_wall_distance: 0.2,
-            wall_run_gravity_factor: 0.35,
-            wall_run_gravity_maximum_velocity: 1.0,
-            wall_run_speed: 5.5,
-            wall_run_max_angle_change: 35f32.to_radians(),
+            wall_grab_enabled: true,
+            wall_grab_min_normal: -0.1,
+            wall_grab_max_normal: 0.6,
+            wall_grab_max_wall_distance: 0.2,
+            wall_grab_max_away_velocity: 2.0,
 
             wall_jump_add_vertical: 1.0,
             wall_jump_max_vertical: 5.0,
             wall_jump_add_horizontal: 5.0,
+
+            min_sword_bounce: 10.0,
         }
     }
 }
@@ -127,7 +130,7 @@ pub struct PlayerInput {
     pub jump: ActionEvents,
     pub slide: ActionEvents,
     pub dash: ActionEvents,
-    pub wall_run: ActionEvents,
+    pub wall_grab: ActionEvents,
 }
 
 impl PlayerInput {
@@ -138,7 +141,7 @@ impl PlayerInput {
         jump: Single<&ActionEvents, With<Action<Jump>>>,
         slide: Single<&ActionEvents, With<Action<Slide>>>,
         dash: Single<&ActionEvents, With<Action<Dash>>>,
-        wall_run: Single<&ActionEvents, With<Action<WallRun>>>,
+        wall_grab: Single<&ActionEvents, With<Action<WallGrab>>>,
         movement: Single<&Action<Move>>,
     ) {
         let dir = Vec3::new(movement.x, 0.0, -movement.y)
@@ -163,7 +166,7 @@ impl PlayerInput {
         pi.1.jump = **jump;
         pi.1.slide = **slide;
         pi.1.dash = **dash;
-        pi.1.wall_run = **wall_run;
+        pi.1.wall_grab = **wall_grab;
     }
 }
 
@@ -207,12 +210,12 @@ pub struct SlamState {
 }
 
 #[derive(Reflect, Clone)]
-pub struct WallRunState {
+pub struct WallGrabState {
     wall_normal: Dir3,
     prev_air_state: AirState,
 }
 
-impl WallRunState {
+impl WallGrabState {
     fn new(wall_normal: Dir3, prev_air_state: AirState) -> Self {
         Self {
             wall_normal,
@@ -227,7 +230,7 @@ pub enum PlayerState {
     Air(AirState),
     Sliding(SlidingState),
     Slam(SlamState),
-    WallRun(WallRunState),
+    WallGrab(WallGrabState),
 }
 
 impl Default for PlayerState {
@@ -242,7 +245,7 @@ impl PlayerState {
     }
 
     pub fn facing_locked(&self) -> bool {
-        matches!(self, Self::Sliding(_) | Self::Slam(_) | Self::WallRun(_))
+        matches!(self, Self::Sliding(_) | Self::Slam(_) | Self::WallGrab(_))
     }
 }
 
@@ -361,7 +364,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             PlayerState::Air(_) => self.update_air(state),
             PlayerState::Sliding(_) => self.update_sliding(state),
             PlayerState::Slam(_) => self.update_slam(state),
-            PlayerState::WallRun(_) => self.update_wall_run(state),
+            PlayerState::WallGrab(_) => self.update_wall_grab(state),
         }
     }
 
@@ -427,9 +430,9 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             return;
         };
 
-        astate.coyote_countdown = (astate.coyote_countdown - self.dt).max(0.0);
+        self.air_friction();
 
-        // TODO: Air movement
+        astate.coyote_countdown = (astate.coyote_countdown - self.dt).max(0.0);
 
         if astate.jump_state == JumpState::Normal
             && self.data.velocity.y > 0.0
@@ -443,13 +446,13 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             astate.jump_state = JumpState::None;
         }
 
-        // Wall Run
-        if self.data.settings.wall_run_enabled
-            && self.data.input.wall_run.contains(ActionEvents::FIRE)
+        // Wall Grab
+        if self.data.settings.wall_grab_enabled
+            && self.data.input.wall_grab.contains(ActionEvents::FIRE)
         {
-            if let Some(wall_normal) = self.try_wall_run() {
+            if let Some(wall_normal) = self.try_wall_grab() {
                 let prev_state = astate.clone();
-                *state = PlayerState::WallRun(WallRunState::new(wall_normal, prev_state));
+                *state = PlayerState::WallGrab(WallGrabState::new(wall_normal, prev_state));
                 return;
             }
         }
@@ -479,10 +482,11 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 (2.0 * self.data.settings.gravity * self.data.settings.dash_height).sqrt();
         }
 
-        if astate.air_jumps < self.data.settings.air_jumps
-            && self.data.input.jump.contains(ActionEvents::START)
-        {
-            if astate.coyote_countdown <= 0.0 {
+        // Jumping
+        if self.data.input.jump.contains(ActionEvents::START) {
+            if astate.air_jumps < self.data.settings.air_jumps && astate.coyote_countdown <= 0.0 {
+                astate.air_jumps += 1;
+
                 // Air Jump
                 self.data.velocity.y =
                     (2.0 * self.data.settings.gravity * self.data.settings.jump).sqrt();
@@ -504,7 +508,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 }
 
                 self.msg.write(PlayerControllerMessage::AirJump);
-            } else {
+            } else if astate.coyote_countdown > 0.0 {
                 // Coyote Time
                 self.ground_jump(state);
 
@@ -512,9 +516,9 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             }
         }
 
-        self.apply_velocity(false, |_| {});
+        self.air_move();
 
-        self.air_friction();
+        self.apply_velocity(false, |_| {});
     }
 
     fn update_sliding(&mut self, state: &mut PlayerState) {
@@ -568,13 +572,18 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         }
     }
 
-    fn update_wall_run(&mut self, state: &mut PlayerState) {
-        let PlayerState::WallRun(wstate) = state else {
+    fn update_wall_grab(&mut self, state: &mut PlayerState) {
+        let PlayerState::WallGrab(wstate) = state else {
             return;
         };
 
-        // Stop wall running without input
-        if !self.input.wall_run.contains(ActionEvents::FIRE) {
+        self.velocity.0 = Vec3::ZERO;
+
+        // Update facing
+        self.pc.facing = Angle::new(vec2(-wstate.wall_normal.z, -wstate.wall_normal.x).to_angle());
+
+        // Stop wall grabbing without input
+        if !self.input.wall_grab.contains(ActionEvents::FIRE) {
             let air_state = wstate.prev_air_state.clone();
 
             *state = PlayerState::Air(AirState {
@@ -617,24 +626,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             return;
         }
 
-        if let Ok(dir) = Dir3::new(vec3(self.input.movement.x, 0.0, self.input.movement.y)) {
-            let want = dir * self.input.speed_modifier * self.settings.wall_run_speed;
-            let clipped = MoveAndSlide::project_velocity(
-                vec3(want.x, 0.0, want.z),
-                &[wstate.wall_normal, -wstate.wall_normal],
-            );
-            if let Ok(dir) = Dir3::new(clipped) {
-                let speed_towards =
-                    speed_towards_dir(vec3(self.velocity.x, 0.0, self.velocity.z), dir);
-                if speed_towards < self.settings.wall_run_speed {
-                    let to_add = self.settings.wall_run_speed - speed_towards;
-                    self.velocity.0 += dir * to_add;
-                }
-            }
-        }
-
         // Stick to wall
-
         let offset = self.mas.depenetrate(
             &self.collider,
             self.transform.translation,
@@ -646,7 +638,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             &self.collider,
             self.transform.translation + offset,
             Quat::default(),
-            -wstate.wall_normal * self.settings.wall_run_max_wall_distance,
+            -wstate.wall_normal * self.settings.wall_grab_max_wall_distance,
             0.01,
             &self.filter,
         ) {
@@ -666,41 +658,6 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
             return;
         }
-
-        // Apply velocity
-
-        let min_y = self.settings.wall_run_min_normal;
-        let max_y = self.settings.wall_run_max_normal;
-
-        let mut angles = [Dir3::Z; 5];
-        let mut angles_len = 0;
-
-        self.apply_velocity(false, |hit| {
-            if hit.normal.y >= min_y && hit.normal.y <= max_y {
-                if angles_len < angles.len() {
-                    angles[angles_len] = *hit.normal;
-                    angles_len += 1;
-                }
-            }
-        });
-
-        let average: Vec3 = angles[..angles_len]
-            .iter()
-            .fold(wstate.wall_normal.as_vec3(), |acc, d| acc + d.as_vec3())
-            / (angles_len as f32);
-
-        if let Ok(dir) = Dir3::new(average) {
-            let angle_change = dir.angle_between(wstate.wall_normal.as_vec3());
-            if angle_change < self.settings.wall_run_max_angle_change {
-                wstate.wall_normal = dir;
-            }
-        }
-
-        // Update facing
-        let facing = vec3(self.velocity.x, 0.0, self.velocity.z)
-            .normalize_or(wstate.wall_normal.rotate_y(PI / 2.0));
-        let facing = MoveAndSlide::project_velocity(facing, &[wstate.wall_normal]);
-        self.pc.facing = Angle::new(vec2(facing.z, facing.x).to_angle());
     }
 
     fn air_friction(&mut self) {
@@ -721,6 +678,15 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         self.velocity.z = new_vel.y;
     }
 
+    fn air_move(&mut self) {
+        if let Ok(dir) = Dir3::new(vec3(self.input.movement.x, 0.0, self.input.movement.y)) {
+            let speed_towards = speed_towards_dir(vec3(self.velocity.x, 0.0, self.velocity.z), dir);
+            let limit = (self.settings.air_speed - speed_towards).max(0.0);
+            let to_add = limit.min(self.settings.air_accel * self.dt);
+            self.velocity.0 += dir * to_add;
+        }
+    }
+
     fn ground_jump(&mut self, state: &mut PlayerState) {
         self.velocity.y = (2.0 * self.settings.gravity * self.settings.jump).sqrt();
         *state = PlayerState::Air(AirState {
@@ -729,13 +695,13 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         });
     }
 
-    fn try_wall_run(&mut self) -> Option<Dir3> {
-        // Check for surrounding walls, choose the one granting
-        // greatest velocity after clipping
+    fn try_wall_grab(&mut self) -> Option<Dir3> {
+        let facing = Vec2::from_angle(self.pc.facing.get());
+        let facing = vec3(facing.y, 0.0, facing.x);
 
         let hvel = vec3(self.velocity.x, 0.0, self.velocity.z);
 
-        let mut direction: Option<(Vec3, Dir3, Dir3)> = None;
+        let mut direction: Option<(f32, Dir3, Dir3)> = None;
 
         for dir in [Dir3::X, Dir3::NEG_X, Dir3::Z, Dir3::NEG_Z] {
             // TODO: Replace with shape hits?
@@ -745,7 +711,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 Quat::default(),
                 dir,
                 &ShapeCastConfig {
-                    max_distance: self.settings.wall_run_max_wall_distance,
+                    max_distance: self.settings.wall_grab_max_wall_distance,
                     ..default()
                 },
                 &self.filter,
@@ -755,20 +721,25 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
             let normal = Dir3::new(hit.normal1).unwrap();
 
-            if normal.y < self.settings.wall_run_min_normal
-                || normal.y > self.settings.wall_run_max_normal
+            if normal.y < self.settings.wall_grab_min_normal
+                || normal.y > self.settings.wall_grab_max_normal
             {
                 continue;
             }
 
-            let hvel = MoveAndSlide::project_velocity(hvel, &[normal]);
+            let speed = speed_towards_dir(hvel, normal);
+            if speed > self.settings.wall_grab_max_away_velocity {
+                continue;
+            }
 
-            if let Some((old_vel, _, _)) = direction {
-                if hvel.length_squared() > old_vel.length_squared() {
-                    direction = Some((hvel, dir, normal));
+            let influence = speed_towards_dir(facing, -normal);
+
+            if let Some((old_influence, _, _)) = direction {
+                if influence > old_influence {
+                    direction = Some((influence, dir, normal));
                 }
             } else {
-                direction = Some((hvel, dir, normal));
+                direction = Some((influence, dir, normal));
             }
         }
 
@@ -778,7 +749,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         let cur_vel = self.velocity.0;
 
-        self.velocity.0 = dir * self.settings.wall_run_max_wall_distance;
+        self.velocity.0 = dir * self.settings.wall_grab_max_wall_distance;
         self.apply_velocity(false, |_| {});
         self.velocity.0 = cur_vel;
 
@@ -787,15 +758,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
     fn half_gravity(&mut self, state: &mut PlayerState) {
         if !state.grounded() {
-            let gravity = if matches!(state, PlayerState::WallRun(_))
-                && self.velocity.y < self.settings.wall_run_gravity_maximum_velocity
-            {
-                self.settings.gravity * self.settings.wall_run_gravity_factor
-            } else {
-                self.settings.gravity
-            };
-
-            self.velocity.y -= gravity * 0.5 * self.dt;
+            self.velocity.y -= self.settings.gravity * 0.5 * self.dt;
         }
 
         if self.velocity.y < -self.settings.terminal_velocity {

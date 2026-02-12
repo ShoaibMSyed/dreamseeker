@@ -80,7 +80,7 @@ pub mod player {
 
     #[derive(InputAction)]
     #[action_output(bool)]
-    pub struct WallRun;
+    pub struct WallGrab;
 
     #[derive(InputAction)]
     #[action_output(bool)]
@@ -126,9 +126,9 @@ pub mod player {
                 ]
             ),
             (
-                Action::<WallRun>::new(),
+                Action::<WallGrab>::new(),
                 bindings![
-                    KeyCode::KeyF,
+                    KeyCode::ControlLeft,
                     GamepadButton::RightTrigger2,
                     (
                         GamepadAxis::RightZ,

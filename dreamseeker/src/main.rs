@@ -13,9 +13,13 @@ use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_skein::SkeinPlugin;
 use dreamseeker_util::DreamSeekerUtil;
 
-use self::player::{Player, camera::PlayerCamera};
+use self::{
+    enemy::Enemy,
+    player::{Player, camera::PlayerCamera},
+};
 
 mod collision;
+mod enemy;
 mod input;
 mod player;
 mod trigger;
@@ -79,6 +83,8 @@ fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
         DebugRender::none(),
         Transform::from_xyz(0.0, 3.0, 0.0),
     ));
+
+    cmd.spawn((Enemy::bundle(), Transform::from_xyz(-10.0, 0.0, -10.0)));
 
     // Spawn Terrain
 
