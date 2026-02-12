@@ -229,15 +229,15 @@ pub struct PlayerController {
 
 impl PlayerController {
     fn step(
-        query: Query<MovementData>,
+        query: Query<(MovementData, &mut PlayerState)>,
         mut mas: MoveAndSlide,
         mut msg: MessageWriter<PlayerControllerMessage>,
         time: Res<Time>,
     ) {
-        for move_data in query {
+        for (move_data, mut state) in query {
             let mut mover = Mover::new(move_data, &mut mas, &mut msg, time.delta());
 
-            mover.step();
+            mover.step(&mut *state);
         }
     }
 
@@ -276,7 +276,6 @@ struct MovementData {
     transform: &'static mut Transform,
     velocity: &'static mut LinearVelocity,
     pc: &'static mut PlayerController,
-    state: &'static mut PlayerState,
     input: &'static PlayerInput,
     settings: &'static PlayerControllerSettings,
     collider: &'static Collider,
@@ -311,34 +310,34 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         }
     }
 
-    fn step(&mut self) {
-        self.half_gravity();
+    fn step(&mut self, state: &mut PlayerState) {
+        self.half_gravity(state);
 
-        self.update_state();
+        self.update_state(state);
 
-        self.snap_to_floor();
-        self.half_gravity();
-        self.check_grounded();
+        self.snap_to_floor(state);
+        self.half_gravity(state);
+        self.check_grounded(state);
     }
 
-    fn update_state(&mut self) {
-        match &*self.data.state {
-            PlayerState::Grounded(_) => self.update_grounded(),
-            PlayerState::Air(_) => self.update_air(),
-            PlayerState::Sliding(_) => self.update_sliding(),
-            PlayerState::Slam(_) => self.update_slam(),
+    fn update_state(&mut self, state: &mut PlayerState) {
+        match state {
+            PlayerState::Grounded(_) => self.update_grounded(state),
+            PlayerState::Air(_) => self.update_air(state),
+            PlayerState::Sliding(_) => self.update_sliding(state),
+            PlayerState::Slam(_) => self.update_slam(state),
         }
     }
 
-    fn update_grounded(&mut self) {
-        let PlayerState::Grounded(state) = &mut *self.data.state else {
+    fn update_grounded(&mut self, state: &mut PlayerState) {
+        let PlayerState::Grounded(gstate) = state else {
             return;
         };
 
-        let coyote_friction = state.frame_count < self.data.settings.coyote_friction;
+        let coyote_friction = gstate.frame_count < self.data.settings.coyote_friction;
 
         if coyote_friction {
-            state.frame_count += 1;
+            gstate.frame_count += 1;
         }
 
         let too_fast = self.velocity.xz().length() > self.settings.run_speed + 0.5;
@@ -370,7 +369,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         self.velocity.y = 0.0;
 
         if self.input.jump.contains(ActionEvents::START) {
-            self.ground_jump();
+            self.ground_jump(state);
 
             if too_fast && coyote_friction {
                 self.msg.write(PlayerControllerMessage::CoyoteFrictionJump);
@@ -379,30 +378,30 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             }
         } else if self.input.slide.contains(ActionEvents::START) && self.settings.slide_enabled {
             let dir = Vec2::from_angle(self.pc.facing.get());
-            *self.state = PlayerState::Sliding(SlidingState {
+            *state = PlayerState::Sliding(SlidingState {
                 direction: Vec2::new(dir.y, dir.x),
                 timer: 0.0,
             });
         }
     }
 
-    fn update_air(&mut self) {
-        let PlayerState::Air(state) = &mut *self.data.state else {
+    fn update_air(&mut self, state: &mut PlayerState) {
+        let PlayerState::Air(astate) = state else {
             return;
         };
 
-        state.coyote_countdown = (state.coyote_countdown - self.dt).max(0.0);
+        astate.coyote_countdown = (astate.coyote_countdown - self.dt).max(0.0);
 
-        if state.jump_state == JumpState::Normal
+        if astate.jump_state == JumpState::Normal
             && self.data.velocity.y > 0.0
             && !self.data.input.jump.contains(ActionEvents::FIRE)
         {
             self.data.velocity.y /= 2.0;
-            state.jump_state = JumpState::Halved;
+            astate.jump_state = JumpState::Halved;
         }
 
-        if state.jump_state != JumpState::None && self.data.velocity.y <= 0.0 {
-            state.jump_state = JumpState::None;
+        if astate.jump_state != JumpState::None && self.data.velocity.y <= 0.0 {
+            astate.jump_state = JumpState::None;
         }
 
         // Wall Run
@@ -414,16 +413,16 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         // Slam
         if self.data.settings.slam_enabled && self.data.input.slide.contains(ActionEvents::START) {
-            *self.data.state = PlayerState::Slam(default());
+            *state = PlayerState::Slam(default());
             return;
         }
 
         // Dash
         if self.data.settings.dash_enabled
-            && !state.dashed
+            && !astate.dashed
             && self.data.input.dash.contains(ActionEvents::START)
         {
-            state.dashed = true;
+            astate.dashed = true;
 
             let dir = Vec2::from_angle(self.data.pc.facing.get());
             let dir = Dir3::new(vec3(dir.y, 0.0, dir.x)).unwrap_or(Dir3::Z);
@@ -437,15 +436,15 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 (2.0 * self.data.settings.gravity * self.data.settings.dash_height).sqrt();
         }
 
-        if state.air_jumps < self.data.settings.air_jumps
+        if astate.air_jumps < self.data.settings.air_jumps
             && self.data.input.jump.contains(ActionEvents::START)
         {
-            if state.coyote_countdown <= 0.0 {
+            if astate.coyote_countdown <= 0.0 {
                 // Air Jump
                 self.data.velocity.y =
                     (2.0 * self.data.settings.gravity * self.data.settings.jump).sqrt();
-                state.air_jumps += 1;
-                state.jump_state = JumpState::Normal;
+                astate.air_jumps += 1;
+                astate.jump_state = JumpState::Normal;
 
                 // Forward Boost
 
@@ -464,50 +463,50 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 self.msg.write(PlayerControllerMessage::AirJump);
             } else {
                 // Coyote Time
-                self.ground_jump();
+                self.ground_jump(state);
 
                 self.msg.write(PlayerControllerMessage::CoyoteTimeJump);
             }
         }
 
-        self.apply_velocity(|_| {});
+        self.apply_velocity(false, |_| {});
 
         self.air_friction();
     }
 
-    fn update_sliding(&mut self) {
-        let PlayerState::Sliding(state) = &mut *self.data.state else {
+    fn update_sliding(&mut self, state: &mut PlayerState) {
+        let PlayerState::Sliding(sstate) = state else {
             return;
         };
 
-        state.timer += self.dt;
+        sstate.timer += self.dt;
 
-        self.data.velocity.x = state.direction.x * self.data.settings.slide_speed;
-        self.data.velocity.z = state.direction.y * self.data.settings.slide_speed;
+        self.data.velocity.x = sstate.direction.x * self.data.settings.slide_speed;
+        self.data.velocity.z = sstate.direction.y * self.data.settings.slide_speed;
 
-        if state.timer >= self.data.settings.slide_time {
-            *self.state = PlayerState::Grounded(default());
+        if sstate.timer >= self.data.settings.slide_time {
+            *state = PlayerState::Grounded(default());
         }
 
         if self.input.jump.contains(ActionEvents::START) {
-            self.ground_jump();
+            self.ground_jump(state);
         }
 
         self.ground_move();
     }
 
-    fn update_slam(&mut self) {
-        let PlayerState::Slam(state) = &mut *self.data.state else {
+    fn update_slam(&mut self, state: &mut PlayerState) {
+        let PlayerState::Slam(sstate) = state else {
             return;
         };
 
         **self.data.velocity = Vec3::ZERO;
 
-        if state.timer < self.data.settings.slam_pause {
-            state.timer += self.dt;
+        if sstate.timer < self.data.settings.slam_pause {
+            sstate.timer += self.dt;
         }
 
-        if state.timer >= self.data.settings.slam_pause {
+        if sstate.timer >= self.data.settings.slam_pause {
             self.velocity.y = -self.data.settings.slam_velocity;
         }
 
@@ -515,7 +514,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         let mut hit_point = None;
 
-        self.apply_velocity(|hit| {
+        self.apply_velocity(false, |hit| {
             if hit.normal.y >= min_floor_angle {
                 hit_point = Some(hit.point);
             }
@@ -544,16 +543,16 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         self.velocity.z = new_vel.y;
     }
 
-    fn ground_jump(&mut self) {
+    fn ground_jump(&mut self, state: &mut PlayerState) {
         self.velocity.y = (2.0 * self.settings.gravity * self.settings.jump).sqrt();
-        *self.state = PlayerState::Air(AirState {
+        *state = PlayerState::Air(AirState {
             jump_state: JumpState::Normal,
             ..default()
         });
     }
 
-    fn half_gravity(&mut self) {
-        if !self.state.grounded() {
+    fn half_gravity(&mut self, state: &mut PlayerState) {
+        if !state.grounded() {
             self.velocity.y -= self.settings.gravity * 0.5 * self.dt;
         }
 
@@ -562,8 +561,8 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         }
     }
 
-    fn snap_to_floor(&mut self) {
-        if !self.state.grounded() {
+    fn snap_to_floor(&mut self, state: &mut PlayerState) {
+        if !state.grounded() {
             return;
         }
 
@@ -596,7 +595,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         self.transform.translation += offset + Vec3::NEG_Y * hit.distance;
     }
 
-    fn check_grounded(&mut self) {
+    fn check_grounded(&mut self, state: &mut PlayerState) {
         let mut grounded = false;
 
         if self.velocity.y <= self.settings.maximum_grounded_up_velocity {
@@ -620,10 +619,10 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             }
         }
 
-        if grounded && !self.state.grounded() {
-            *self.state = PlayerState::Grounded(default());
-        } else if !grounded && self.state.grounded() {
-            *self.state = PlayerState::Air(AirState::default().with_coyote(&self.settings));
+        if grounded && !state.grounded() {
+            *state = PlayerState::Grounded(default());
+        } else if !grounded && state.grounded() {
+            *state = PlayerState::Air(AirState::default().with_coyote(&self.settings));
         }
     }
 
@@ -634,7 +633,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         let start_pos = self.transform.translation;
         let start_vel = self.velocity.0;
 
-        if self.apply_velocity(|_| {}) {
+        if self.apply_velocity(true, |_| {}) {
             return;
         }
 
@@ -662,7 +661,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         self.transform.translation.y += stepped_up;
 
-        self.apply_velocity(|_| {});
+        self.apply_velocity(true, |_| {});
 
         let snap_down = self.mas.cast_move(
             &self.collider,
@@ -703,7 +702,11 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
     }
 
     /// Returns true if the velocity was applied unimpeded
-    fn apply_velocity(&mut self, mut hit_callback: impl FnMut(&mut MoveAndSlideHitData)) -> bool {
+    fn apply_velocity(
+        &mut self,
+        grounded: bool,
+        mut hit_callback: impl FnMut(&mut MoveAndSlideHitData),
+    ) -> bool {
         let mut unimpeded = true;
 
         let MoveAndSlideOutput {
@@ -716,11 +719,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
             self.velocity.0,
             self.delta,
             &MoveAndSlideConfig {
-                planes: if self.state.grounded() {
-                    vec![Dir3::Y]
-                } else {
-                    vec![]
-                },
+                planes: if grounded { vec![Dir3::Y] } else { vec![] },
                 ..default()
             },
             &self.filter,
