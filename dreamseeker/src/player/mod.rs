@@ -11,7 +11,9 @@ use bevy::{
 };
 use dreamseeker_util::{construct::Make, observers};
 
-use self::controller::{PlayerController, PlayerControllerMessage, PlayerState};
+use self::controller::{
+    PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
+};
 
 pub mod camera;
 mod controller;
@@ -62,6 +64,9 @@ struct PlayerModel {
     run: AnimationNodeIndex,
     slide_start: AnimationNodeIndex,
     slide: AnimationNodeIndex,
+    walk: AnimationNodeIndex,
+    jump: AnimationNodeIndex,
+    fall: AnimationNodeIndex,
     aplayer: Option<Entity>,
 }
 
@@ -100,10 +105,13 @@ impl Player {
         let mut model = PlayerModel::default();
 
         let mut graph = AnimationGraph::new();
-        model.idle = graph.add_clip(assets.load("player.glb#Animation0"), 1.0, graph.root);
-        model.run = graph.add_clip(assets.load("player.glb#Animation1"), 1.0, graph.root);
-        model.slide_start = graph.add_clip(assets.load("player.glb#Animation3"), 1.0, graph.root);
-        model.slide = graph.add_clip(assets.load("player.glb#Animation2"), 1.0, graph.root);
+        model.idle = graph.add_clip(assets.load("player.glb#Animation1"), 1.0, graph.root);
+        model.run = graph.add_clip(assets.load("player.glb#Animation3"), 1.0, graph.root);
+        model.slide_start = graph.add_clip(assets.load("player.glb#Animation5"), 1.0, graph.root);
+        model.slide = graph.add_clip(assets.load("player.glb#Animation4"), 1.0, graph.root);
+        model.walk = graph.add_clip(assets.load("player.glb#Animation6"), 1.0, graph.root);
+        model.fall = graph.add_clip(assets.load("player.glb#Animation0"), 1.0, graph.root);
+        model.jump = graph.add_clip(assets.load("player.glb#Animation2"), 1.0, graph.root);
 
         model.graph = graphs.add(graph);
 
@@ -159,7 +167,12 @@ impl Player {
     }
 
     fn animate(
-        player: Single<(&PlayerController, &PlayerState, &LinearVelocity)>,
+        player: Single<(
+            &PlayerController,
+            &PlayerState,
+            &LinearVelocity,
+            &PlayerControllerSettings,
+        )>,
         model: Single<&PlayerModel>,
         mut aplayer: Query<&mut AnimationPlayer>,
     ) -> Result {
@@ -168,10 +181,29 @@ impl Player {
         };
 
         let mut aplayer = aplayer.get_mut(aplayer_entity)?;
-        if player.2.xz().length_squared() == 0.0 {
+        if matches!(player.1, PlayerState::Air(_)) {
+            if player.2.y > 0.0 {
+                if !aplayer.is_playing_animation(model.jump) {
+                    aplayer.stop_all();
+                    aplayer.play(model.jump).repeat();
+                }
+            } else {
+                if !aplayer.is_playing_animation(model.fall) {
+                    aplayer.stop_all();
+                    aplayer.play(model.fall).repeat();
+                }
+            }
+        } else if player.2.xz().length_squared() == 0.0 {
             if !aplayer.is_playing_animation(model.idle) {
                 aplayer.stop_all();
                 aplayer.play(model.idle).repeat();
+            }
+        } else if player.2.xz().length() < player.3.run_speed - 1.0
+            && matches!(player.1, PlayerState::Grounded(_))
+        {
+            if !aplayer.is_playing_animation(model.walk) {
+                aplayer.stop_all();
+                aplayer.play(model.walk).repeat();
             }
         } else if matches!(player.1, PlayerState::Sliding { .. }) {
             if !aplayer.is_playing_animation(model.slide_start) {
