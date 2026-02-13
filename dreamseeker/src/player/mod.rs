@@ -1,8 +1,6 @@
 use std::f32::consts::PI;
 
-use avian3d::prelude::{
-    Collider, CollisionStart, DebugRender, LinearVelocity,
-};
+use avian3d::prelude::{Collider, CollisionStart, DebugRender, LinearVelocity};
 use bevy::{
     audio::{PlaybackMode, Volume},
     prelude::*,

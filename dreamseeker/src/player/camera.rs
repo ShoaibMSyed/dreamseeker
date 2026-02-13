@@ -1,9 +1,13 @@
 use std::f32::consts::PI;
 
-use avian3d::prelude::{
-    Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter,
+use avian3d::{
+    character_controller::move_and_slide::DepenetrationConfig,
+    prelude::{Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter},
 };
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+};
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
 
@@ -167,6 +171,7 @@ impl PlayerCamera {
     fn on_pause(
         _: On<Start<Pause>>,
         screen: Query<(Entity, &PauseScreen)>,
+        mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
         state: Res<State<GameState>>,
         mut next_state: ResMut<NextState<GameState>>,
         mut cmd: Commands,
@@ -176,9 +181,13 @@ impl PlayerCamera {
             for (e, _) in screen {
                 cmd.entity(e).despawn();
             }
+            cursor.grab_mode = CursorGrabMode::Confined;
+            cursor.visible = false;
         } else if state.get() == &GameState::InGame {
             next_state.set(GameState::Paused);
             cmd.spawn(PauseScreen::bundle());
+            cursor.grab_mode = CursorGrabMode::None;
+            cursor.visible = true;
         }
     }
 
@@ -215,9 +224,17 @@ impl PlayerCamera {
 
         // camera.0.translation = out.position;
 
-        let hit = mas.spatial_query.cast_shape(
+        let offset = mas.depenetrate(
             &camera.1.collider,
             *player_pos,
+            Quat::default(),
+            &DepenetrationConfig::default(),
+            &SpatialQueryFilter::from_excluded_entities([player.2]).with_mask(GameLayer::Level),
+        );
+
+        let hit = mas.spatial_query.cast_shape(
+            &camera.1.collider,
+            *player_pos + offset,
             Quat::default(),
             Dir3::new(camera_offset).unwrap_or(Dir3::Z),
             &ShapeCastConfig::from_max_distance(camera_offset.length()),
@@ -225,10 +242,10 @@ impl PlayerCamera {
         );
 
         match hit {
-            None => camera.0.translation = *player_pos + camera_offset,
+            None => camera.0.translation = *player_pos + camera_offset + offset,
             Some(hit) => {
                 camera.0.translation =
-                    *player_pos + camera_offset.normalize_or_zero() * hit.distance;
+                    *player_pos + camera_offset.normalize_or_zero() * hit.distance + offset;
             }
         }
 

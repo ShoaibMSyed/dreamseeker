@@ -3,11 +3,10 @@ use avian3d::{
     prelude::{DebugRender, PhysicsDebugPlugin, PhysicsGizmos},
 };
 use bevy::{
-    input::common_conditions::input_toggle_active,
     prelude::*,
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
-use bevy_enhanced_input::{EnhancedInputPlugin, prelude::ActionSources};
+use bevy_enhanced_input::EnhancedInputPlugin;
 use bevy_flurx::FlurxPlugin;
 use bevy_framepace::FramepacePlugin;
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
@@ -36,7 +35,7 @@ fn main() {
             DreamSeeker,
             SkeinPlugin::default(),
             EguiPlugin::default(),
-            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::KeyG)),
+            WorldInspectorPlugin::new().run_if(in_state(GameState::Paused)),
         ))
         .run();
 }
@@ -63,8 +62,7 @@ impl Plugin for DreamSeeker {
 
         app.init_resource::<Sounds>()
             .init_state::<GameState>()
-            .add_systems(Startup, setup)
-            .add_systems(Update, capture_mouse);
+            .add_systems(Startup, setup);
     }
 }
 
@@ -76,7 +74,11 @@ pub enum GameState {
     Paused,
 }
 
-fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
+fn setup(
+    mut cmd: Commands,
+    assets: Res<AssetServer>,
+    mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
+) {
     cmd.insert_resource(GlobalAmbientLight {
         brightness: 200.0,
         ..default()
@@ -106,35 +108,9 @@ fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
         Name::new("Scene"),
         SceneRoot(assets.load("level.glb#Scene0")),
     ));
-}
 
-fn capture_mouse(
-    mut not_first: Local<bool>,
-    mut captured: Local<bool>,
-    mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
-    mut actions: ResMut<ActionSources>,
-    keys: Res<ButtonInput<KeyCode>>,
-) {
-    if keys.just_pressed(KeyCode::KeyG) || !*not_first {
-        *not_first = true;
-        *captured = !*captured;
-
-        if *captured {
-            cursor.grab_mode = CursorGrabMode::Confined;
-            cursor.visible = false;
-            actions.keyboard = true;
-            actions.mouse_buttons = true;
-            actions.mouse_motion = true;
-            actions.mouse_wheel = true;
-        } else {
-            cursor.grab_mode = CursorGrabMode::None;
-            cursor.visible = true;
-            actions.keyboard = false;
-            actions.mouse_buttons = false;
-            actions.mouse_motion = false;
-            actions.mouse_wheel = false;
-        }
-    }
+    cursor.grab_mode = CursorGrabMode::Confined;
+    cursor.visible = false;
 }
 
 macro_rules! sounds {
