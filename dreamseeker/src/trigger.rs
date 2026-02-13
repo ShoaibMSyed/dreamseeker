@@ -1,7 +1,10 @@
 use avian3d::prelude::*;
-use bevy::prelude::*;
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 
-use crate::player::Player;
+use crate::player::{Die, Player};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(FixedUpdate, check_collisions);
@@ -49,5 +52,24 @@ impl TriggerTeleport {
         };
 
         transform.translation = this.0;
+    }
+}
+
+#[derive(Component, Reflect, Clone, Default)]
+#[reflect(Component, Default)]
+#[require(Transform, Sensor, CollisionEventsEnabled)]
+#[component(on_add)]
+pub struct DeathTrigger;
+
+impl DeathTrigger {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        world
+            .commands()
+            .entity(ctx.entity)
+            .observe(Self::on_collision);
+    }
+
+    fn on_collision(event: On<CollisionStart>, mut cmd: Commands) {
+        cmd.trigger(Die(event.collider2));
     }
 }

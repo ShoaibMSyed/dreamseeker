@@ -17,11 +17,45 @@ use crate::{
     ui::item::{ScreenClose, item_description},
 };
 
-use super::{AttackState, Player, controller::PlayerControllerSettings, sword::Sword};
+use super::{Player, controller::PlayerControllerSettings};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(Chest::on_hit)
         .add_systems(Update, PlayerItems::on_update);
+}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+#[require(
+    Name::new("Token"),
+    Item,
+    RigidBody::Static,
+    Collider::sphere(0.5),
+    CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL),
+    CollisionEventsEnabled
+)]
+#[component(on_add)]
+pub struct Token;
+
+impl Token {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        let scene = SceneRoot(world.load_asset("token.glb#Scene0"));
+        world
+            .commands()
+            .entity(ctx.entity)
+            .observe(Self::on_hit)
+            .insert(scene);
+    }
+
+    fn on_hit(event: On<CollisionStart>, mut player: Query<&mut Player>, mut cmd: Commands) {
+        let Ok(mut player) = player.get_mut(event.collider2) else {
+            return;
+        };
+
+        player.dream_tokens += 1;
+
+        cmd.entity(event.collider1).despawn();
+    }
 }
 
 #[derive(Component, Reflect, Default, Deref, DerefMut)]
@@ -122,10 +156,8 @@ impl Chest {
 
         for entity in children.iter_descendants(event.entity) {
             if col.contains(entity) {
-                cmd.entity(entity).insert(CollisionLayers::new(
-                    LayerMask::NONE | GameLayer::Level | GameLayer::Attackable,
-                    LayerMask::ALL,
-                ));
+                cmd.entity(entity)
+                    .insert(CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL));
             }
 
             if aplayer.contains(entity) {
@@ -142,12 +174,11 @@ impl Chest {
         event: On<CollisionStart>,
         parent: Query<&ChildOf>,
         q_chest: Query<(&Chest, &Item)>,
-        sword: Query<&Sword>,
-        player: Single<&Player>,
+        player: Query<&Player>,
         mut cmd: Commands,
     ) {
         for entity in parent.iter_ancestors(event.collider1) {
-            if !sword.contains(event.collider2) {
+            if !player.contains(event.collider2) {
                 continue;
             }
 
@@ -156,11 +187,9 @@ impl Chest {
             };
             let item = item.clone();
 
-            if player.attack_state != AttackState::None {
-                cmd.spawn(Reactor::schedule(move |task| {
-                    item_get_cutscene(task, entity, item)
-                }));
-            }
+            cmd.spawn(Reactor::schedule(move |task| {
+                item_get_cutscene(task, entity, item)
+            }));
         }
     }
 }

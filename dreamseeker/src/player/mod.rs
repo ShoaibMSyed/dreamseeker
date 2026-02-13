@@ -81,6 +81,7 @@ enum AttackState {
 )]
 pub struct Player {
     attack_state: AttackState,
+    pub dream_tokens: u8,
 }
 
 impl Player {
@@ -386,3 +387,6 @@ impl Player {
         }
     }
 }
+
+#[derive(EntityEvent)]
+pub struct Die(pub Entity);
