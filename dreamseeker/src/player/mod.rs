@@ -1,12 +1,10 @@
 use std::f32::consts::PI;
 
 use avian3d::prelude::{
-    Collider, CollisionStart, DebugRender, LinearVelocity, ShapeCastConfig, SpatialQuery,
-    SpatialQueryFilter,
+    Collider, CollisionStart, DebugRender, LinearVelocity,
 };
 use bevy::{
     audio::{PlaybackMode, Volume},
-    pbr::decal::{ForwardDecal, ForwardDecalMaterial, ForwardDecalMaterialExt},
     prelude::*,
     scene::SceneInstanceReady,
 };
@@ -42,7 +40,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             Player::rotate_model,
             Player::animate,
-            Player::update_shadow,
+            // Player::update_shadow,
             Player::play_sounds,
             Player::update_attack_state,
         )
@@ -101,12 +99,12 @@ impl Player {
                     Transform::from_xyz(0.0, -PLAYER_HEIGHT / 2.0, 0.0),
                     observers![Self::setup_animations],
                 ),
-                (
-                    ForwardDecal,
-                    PlayerShadow,
-                    Transform::from_scale(Vec3::splat(PLAYER_WIDTH)),
-                    Make(Self::make_shadow),
-                ),
+                // (
+                //     ForwardDecal,
+                //     PlayerShadow,
+                //     Transform::from_scale(Vec3::splat(PLAYER_WIDTH)),
+                //     Make(Self::make_shadow),
+                // ),
             ],
         )
     }
@@ -158,21 +156,21 @@ impl Player {
         Ok((SceneRoot(assets.load("player.glb#Scene0")), model))
     }
 
-    fn make_shadow(
-        mut decals: ResMut<Assets<ForwardDecalMaterial<StandardMaterial>>>,
-        assets: Res<AssetServer>,
-    ) -> Result<impl Bundle + use<>> {
-        Ok(MeshMaterial3d(decals.add(ForwardDecalMaterial {
-            base: StandardMaterial {
-                // base_color: Color::linear_rgb(0.1, 0.3, 0.8),
-                base_color_texture: Some(assets.load("shadow.png")),
-                ..default()
-            },
-            extension: ForwardDecalMaterialExt {
-                depth_fade_factor: 1.0,
-            },
-        })))
-    }
+    // fn make_shadow(
+    //     mut decals: ResMut<Assets<ForwardDecalMaterial<StandardMaterial>>>,
+    //     assets: Res<AssetServer>,
+    // ) -> Result<impl Bundle + use<>> {
+    //     Ok(MeshMaterial3d(decals.add(ForwardDecalMaterial {
+    //         base: StandardMaterial {
+    //             // base_color: Color::linear_rgb(0.1, 0.3, 0.8),
+    //             base_color_texture: Some(assets.load("shadow.png")),
+    //             ..default()
+    //         },
+    //         extension: ForwardDecalMaterialExt {
+    //             depth_fade_factor: 1.0,
+    //         },
+    //     })))
+    // }
 
     fn setup_animations(
         event: On<SceneInstanceReady>,
@@ -301,35 +299,35 @@ impl Player {
         Ok(())
     }
 
-    fn update_shadow(
-        player: Single<(Entity, &PlayerController, &Transform, &Collider), Changed<Transform>>,
-        mut shadow: Single<
-            (&mut Transform, &mut Visibility),
-            (With<PlayerShadow>, Without<PlayerController>),
-        >,
-        spatial: SpatialQuery,
-    ) {
-        let hit = spatial.cast_shape(
-            &player.3,
-            player.2.translation,
-            Quat::default(),
-            Dir3::NEG_Y,
-            &ShapeCastConfig::default(),
-            &SpatialQueryFilter::from_excluded_entities([player.0]),
-        );
+    // fn update_shadow(
+    //     player: Single<(Entity, &PlayerController, &Transform, &Collider), Changed<Transform>>,
+    //     mut shadow: Single<
+    //         (&mut Transform, &mut Visibility),
+    //         (With<PlayerShadow>, Without<PlayerController>),
+    //     >,
+    //     spatial: SpatialQuery,
+    // ) {
+    //     let hit = spatial.cast_shape(
+    //         &player.3,
+    //         player.2.translation,
+    //         Quat::default(),
+    //         Dir3::NEG_Y,
+    //         &ShapeCastConfig::default(),
+    //         &SpatialQueryFilter::from_excluded_entities([player.0]),
+    //     );
 
-        match hit {
-            None => {
-                *shadow.1 = Visibility::Hidden;
-            }
-            Some(hit) => {
-                *shadow.1 = Visibility::Visible;
+    //     match hit {
+    //         None => {
+    //             *shadow.1 = Visibility::Hidden;
+    //         }
+    //         Some(hit) => {
+    //             *shadow.1 = Visibility::Visible;
 
-                shadow.0.translation.y =
-                    -hit.distance - player.3.shape().as_cuboid().unwrap().half_extents.y;
-            }
-        }
-    }
+    //             shadow.0.translation.y =
+    //                 -hit.distance - player.3.shape().as_cuboid().unwrap().half_extents.y;
+    //         }
+    //     }
+    // }
 
     fn play_sounds(
         player: Single<&Transform, With<Player>>,

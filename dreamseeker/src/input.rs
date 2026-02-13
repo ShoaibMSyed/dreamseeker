@@ -38,6 +38,7 @@ pub mod camera {
                 bindings![
                     KeyCode::KeyE,
                     GamepadButton::LeftTrigger2,
+                    GamepadButton::LeftTrigger,
                     (
                         GamepadAxis::LeftZ,
                         Clamp::pos(),
@@ -145,6 +146,7 @@ pub mod player {
                 bindings![
                     KeyCode::ControlLeft,
                     GamepadButton::RightTrigger2,
+                    GamepadButton::RightTrigger,
                     (
                         GamepadAxis::RightZ,
                         Clamp::pos(),

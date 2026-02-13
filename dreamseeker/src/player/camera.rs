@@ -1,12 +1,18 @@
 use std::f32::consts::PI;
 
-use avian3d::prelude::{Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter};
-use bevy::{anti_alias::fxaa::Fxaa, core_pipeline::prepass::DepthPrepass, prelude::*};
+use avian3d::prelude::{
+    Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter,
+};
+use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
 
 use crate::{
-    GameState, collision::GameLayer, input::camera::{CenterCamera, MoveCamera, Pause}, ui::pause::PauseScreen, util::angle::{Angle, AsAngle}
+    GameState,
+    collision::GameLayer,
+    input::camera::{CenterCamera, MoveCamera, Pause},
+    ui::pause::PauseScreen,
+    util::angle::{Angle, AsAngle},
 };
 
 use super::{PLAYER_HEIGHT, Player, controller::PlayerController};
@@ -39,7 +45,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 #[derive(Component, Reflect)]
-#[require(Camera3d, DepthPrepass, Msaa::Off, Fxaa, SpatialListener)]
+#[require(Camera3d, SpatialListener)]
 pub struct PlayerCamera {
     pub zoom: f32,
 
@@ -185,7 +191,7 @@ impl PlayerCamera {
         mut camera: Single<(&mut Transform, &PlayerCamera), Without<Player>>,
         player: Single<(&Transform, &Collider, Entity), With<Player>>,
         time: Res<Time>,
-        mas: MoveAndSlide
+        mas: MoveAndSlide,
     ) {
         let target = player.0.translation
             + Vec3::Y * (-player.1.shape().as_cuboid().unwrap().half_extents.y + PLAYER_HEIGHT);
@@ -215,14 +221,14 @@ impl PlayerCamera {
             Quat::default(),
             Dir3::new(camera_offset).unwrap_or(Dir3::Z),
             &ShapeCastConfig::from_max_distance(camera_offset.length()),
-            &SpatialQueryFilter::from_excluded_entities([player.2])
-                .with_mask(GameLayer::Level),
+            &SpatialQueryFilter::from_excluded_entities([player.2]).with_mask(GameLayer::Level),
         );
 
         match hit {
             None => camera.0.translation = *player_pos + camera_offset,
             Some(hit) => {
-                camera.0.translation = *player_pos + camera_offset.normalize_or_zero() * hit.distance;
+                camera.0.translation =
+                    *player_pos + camera_offset.normalize_or_zero() * hit.distance;
             }
         }
 
