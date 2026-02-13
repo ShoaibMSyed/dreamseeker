@@ -23,6 +23,10 @@ pub mod camera {
     pub struct CenterCamera;
 
     #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Pause;
+
+    #[derive(InputAction)]
     #[action_output(Vec2)]
     pub struct MoveCamera;
 
@@ -52,6 +56,13 @@ pub mod camera {
                         .with(DeadZone::default()),
                 )),
             ),
+            (
+                Action::<Pause>::new(),
+                bindings![
+                    GamepadButton::Start,
+                    KeyCode::Escape,
+                ],
+            )
         ])
     }
 }
@@ -154,12 +165,26 @@ pub mod ui {
     #[action_output(bool)]
     pub struct Confirm;
 
+    #[derive(InputAction)]
+    #[action_output(Vec2)]
+    pub struct Move;
+
     pub fn actions() -> impl Bundle {
         actions!(
-            Screen[(
-                Action::<Confirm>::new(),
-                bindings![KeyCode::Space, GamepadButton::East,],
-            )]
+            Screen[
+                (
+                    Action::<Confirm>::new(),
+                    bindings![KeyCode::Space, GamepadButton::East,],
+                ),
+                (
+                    Action::<Move>::new(),
+                    Bindings::spawn((
+                        Cardinal::wasd_keys(),
+                        Axial::left_stick()
+                            .with(DeadZone::new(DeadZoneKind::Axial)),
+                    )),
+                ),
+            ]
         )
     }
 }

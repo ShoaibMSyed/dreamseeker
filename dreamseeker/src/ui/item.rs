@@ -7,13 +7,12 @@ use crate::{
     player::item::Item,
 };
 
+use super::Screen;
+
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<ScreenClose>()
         .add_systems(Update, ItemDescriptionScreen::update);
 }
-
-#[derive(Component, Reflect, Default)]
-pub struct Screen;
 
 pub fn item_description(item: Item) -> impl Bundle {
     let name = (

@@ -73,6 +73,7 @@ pub enum GameState {
     #[default]
     InGame,
     Cutscene,
+    Paused,
 }
 
 fn setup(mut cmd: Commands, assets: Res<AssetServer>) {

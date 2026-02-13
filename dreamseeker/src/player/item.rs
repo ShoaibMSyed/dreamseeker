@@ -14,7 +14,7 @@ use bevy_flurx::{
 use crate::{
     GameState, Sounds,
     collision::GameLayer,
-    ui::{ScreenClose, item_description},
+    ui::item::{ScreenClose, item_description},
 };
 
 use super::{AttackState, Player, controller::PlayerControllerSettings, sword::Sword};
@@ -44,7 +44,7 @@ impl PlayerItems {
     }
 }
 
-#[derive(Component, Reflect, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Component, Reflect, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[reflect(Component, Default)]
 pub enum Item {
     #[default]

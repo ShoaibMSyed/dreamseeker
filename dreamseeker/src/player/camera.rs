@@ -6,7 +6,9 @@ use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
 
 use crate::{
-    input::camera::{CenterCamera, MoveCamera},
+    GameState,
+    input::camera::{CenterCamera, MoveCamera, Pause},
+    ui::pause::PauseScreen,
     util::angle::{Angle, AsAngle},
 };
 
@@ -34,7 +36,8 @@ pub(super) fn plugin(app: &mut App) {
             PlayerCamera::system,
             PlayerCamera::follow_player,
             PlayerCamera::set_fov,
-        ),
+        )
+            .run_if(not(in_state(GameState::Paused))),
     );
 }
 
@@ -73,7 +76,7 @@ impl PlayerCamera {
                 fov: MIN_FOV,
                 ..default()
             }),
-            observers![Self::on_center, Self::on_move,],
+            observers![Self::on_center, Self::on_move, Self::on_pause],
         )
     }
 
@@ -151,6 +154,24 @@ impl PlayerCamera {
         time: Res<Time>,
     ) {
         camera.apply(event.value, time.delta_secs());
+    }
+
+    fn on_pause(
+        _: On<Start<Pause>>,
+        screen: Query<(Entity, &PauseScreen)>,
+        state: Res<State<GameState>>,
+        mut next_state: ResMut<NextState<GameState>>,
+        mut cmd: Commands,
+    ) {
+        if state.get() == &GameState::Paused {
+            next_state.set(GameState::InGame);
+            for (e, _) in screen {
+                cmd.entity(e).despawn();
+            }
+        } else if state.get() == &GameState::InGame {
+            next_state.set(GameState::Paused);
+            cmd.spawn(PauseScreen::bundle());
+        }
     }
 
     fn system(mut camera: Single<&mut PlayerCamera>, time: Res<Time>) {
