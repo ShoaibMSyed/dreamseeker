@@ -13,54 +13,41 @@ use bevy::{
 use bevy_enhanced_input::prelude::Start;
 use dreamseeker_util::{construct::Make, observers};
 
-use crate::input::player::Attack;
+use crate::{GameState, Sounds, input::player::Attack};
 
 use self::{
     controller::{
         JumpState, PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
     },
+    item::PlayerItems,
     sword::Sword,
 };
 
 pub mod camera;
 mod controller;
+pub mod item;
 mod sword;
 
 const PLAYER_HEIGHT: f32 = 1.7;
 const PLAYER_WIDTH: f32 = 0.35;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins((self::camera::plugin, self::controller::plugin))
-        .init_resource::<PlayerSounds>()
-        .add_systems(
-            Update,
-            (
-                Player::rotate_model,
-                Player::animate,
-                Player::update_shadow,
-                Player::play_sounds,
-                Player::update_attack_state,
-            ),
-        );
-}
-
-#[derive(Resource)]
-struct PlayerSounds {
-    jump: Handle<AudioSource>,
-    coyote_time_jump: Handle<AudioSource>,
-    coyote_friction_jump: Handle<AudioSource>,
-    air_jump: Handle<AudioSource>,
-}
-
-impl FromWorld for PlayerSounds {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            jump: world.load_asset("jump.ogg"),
-            coyote_time_jump: world.load_asset("coyote_time_jump.ogg"),
-            coyote_friction_jump: world.load_asset("coyote_friction_jump.ogg"),
-            air_jump: world.load_asset("air_jump.ogg"),
-        }
-    }
+    app.add_plugins((
+        self::camera::plugin,
+        self::controller::plugin,
+        self::item::plugin,
+    ))
+    .add_systems(
+        Update,
+        (
+            Player::rotate_model,
+            Player::animate,
+            Player::update_shadow,
+            Player::play_sounds,
+            Player::update_attack_state,
+        )
+            .run_if(in_state(GameState::InGame)),
+    );
 }
 
 #[derive(Component, Reflect, Default)]
@@ -91,7 +78,12 @@ enum AttackState {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(Name::new("Player"), PlayerController, InheritedVisibility)]
+#[require(
+    Name::new("Player"),
+    PlayerController,
+    PlayerItems,
+    InheritedVisibility
+)]
 pub struct Player {
     attack_state: AttackState,
 }
@@ -121,14 +113,27 @@ impl Player {
         )
     }
 
-    fn on_attack(_: On<Start<Attack>>, mut player: Single<(&mut Player, &PlayerState)>) -> Result {
+    fn on_attack(
+        _: On<Start<Attack>>,
+        mut player: Single<(&mut Player, &PlayerState)>,
+        sounds: Res<Sounds>,
+        mut cmd: Commands,
+    ) -> Result {
         if player.0.attack_state == AttackState::None && matches!(player.1, PlayerState::Air(_)) {
             player.0.attack_state = AttackState::Spin;
+            cmd.spawn((
+                AudioPlayer::new(sounds.sword_swing.clone()),
+                PlaybackSettings::DESPAWN,
+            ));
         }
         if player.0.attack_state == AttackState::None
             && matches!(player.1, PlayerState::Grounded(_))
         {
             player.0.attack_state = AttackState::Normal;
+            cmd.spawn((
+                AudioPlayer::new(sounds.sword_swing.clone()),
+                PlaybackSettings::DESPAWN,
+            ));
         }
 
         Ok(())
@@ -351,7 +356,7 @@ impl Player {
     fn play_sounds(
         player: Single<&Transform, With<Player>>,
         mut msg: MessageReader<PlayerControllerMessage>,
-        sounds: Res<PlayerSounds>,
+        sounds: Res<Sounds>,
         mut cmd: Commands,
     ) {
         for msg in msg.read() {

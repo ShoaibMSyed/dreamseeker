@@ -1,11 +1,15 @@
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::InputContextAppExt;
 
-use crate::player::{Player, camera::PlayerCamera};
+use crate::{
+    player::{Player, camera::PlayerCamera},
+    ui::Screen,
+};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_input_context_to::<FixedPreUpdate, Player>()
-        .add_input_context::<PlayerCamera>();
+        .add_input_context::<PlayerCamera>()
+        .add_input_context::<Screen>();
 }
 
 pub mod camera {
@@ -137,5 +141,25 @@ pub mod player {
                 ]
             ),
         ])
+    }
+}
+
+pub mod ui {
+    use bevy::prelude::*;
+    use bevy_enhanced_input::prelude::*;
+
+    use crate::ui::Screen;
+
+    #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Confirm;
+
+    pub fn actions() -> impl Bundle {
+        actions!(
+            Screen[(
+                Action::<Confirm>::new(),
+                bindings![KeyCode::Space, GamepadButton::East,],
+            )]
+        )
     }
 }

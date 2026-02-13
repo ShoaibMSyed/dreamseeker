@@ -8,6 +8,7 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
 use bevy_enhanced_input::{EnhancedInputPlugin, prelude::ActionSources};
+use bevy_flurx::FlurxPlugin;
 use bevy_framepace::FramepacePlugin;
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_skein::SkeinPlugin;
@@ -23,6 +24,7 @@ mod enemy;
 mod input;
 mod player;
 mod trigger;
+mod ui;
 mod util;
 
 fn main() {
@@ -30,6 +32,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             FramepacePlugin,
+            FlurxPlugin,
             DreamSeeker,
             SkeinPlugin::default(),
             EguiPlugin::default(),
@@ -50,6 +53,7 @@ impl Plugin for DreamSeeker {
             self::input::plugin,
             self::player::plugin,
             self::trigger::plugin,
+            self::ui::plugin,
         ));
 
         *app.world_mut()
@@ -57,9 +61,18 @@ impl Plugin for DreamSeeker {
             .config_mut::<PhysicsGizmos>()
             .1 = PhysicsGizmos::none();
 
-        app.add_systems(Startup, setup)
+        app.init_resource::<Sounds>()
+            .init_state::<GameState>()
+            .add_systems(Startup, setup)
             .add_systems(Update, capture_mouse);
     }
+}
+
+#[derive(States, Reflect, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum GameState {
+    #[default]
+    InGame,
+    Cutscene,
 }
 
 fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
@@ -88,7 +101,10 @@ fn setup(mut cmd: Commands, assets: Res<AssetServer>) {
 
     // Spawn Terrain
 
-    cmd.spawn(SceneRoot(assets.load("level.glb#Scene0")));
+    cmd.spawn((
+        Name::new("Scene"),
+        SceneRoot(assets.load("level.glb#Scene0")),
+    ));
 }
 
 fn capture_mouse(
@@ -119,3 +135,32 @@ fn capture_mouse(
         }
     }
 }
+
+macro_rules! sounds {
+    ($($name:ident),* $(,)?) => {
+        #[derive(Resource)]
+        pub struct Sounds {
+            $(pub $name: Handle<AudioSource>,)*
+        }
+
+        impl FromWorld for Sounds {
+            fn from_world(world: &mut World) -> Self {
+                Sounds {
+                    $($name: world.load_asset(format!("{}.ogg", stringify!($name))),)*
+                }
+            }
+        }
+    }
+}
+
+sounds!(
+    air_jump,
+    chest_open,
+    coyote_friction_jump,
+    coyote_time_jump,
+    footstep,
+    item_get,
+    jump,
+    sword_hit,
+    sword_swing
+);

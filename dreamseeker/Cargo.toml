@@ -12,3 +12,4 @@ bevy_enhanced_input = "0.23.2"
 bevy_skein = "0.5.0"
 bevy_framepace = "0.21.0"
 bevy-inspector-egui = "0.36.0"
+bevy_flurx = { version = "0.14.0", features = ["state"] }

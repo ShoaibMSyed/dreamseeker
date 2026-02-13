@@ -11,7 +11,7 @@ use crate::collision::GameLayer;
 #[derive(Component, Reflect, Default)]
 #[require(
     Name::new("Sword"),
-    CollisionLayers::new(GameLayer::Sword, GameLayer::Bouncy),
+    CollisionLayers::new(GameLayer::Sword, GameLayer::Attackable),
     CollisionEventsEnabled,
     Collider::compound(vec![(
         vec3(0.0, 0.7, 0.0),

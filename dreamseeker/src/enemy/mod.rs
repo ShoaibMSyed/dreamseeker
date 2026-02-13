@@ -6,7 +6,7 @@ use crate::collision::GameLayer;
 
 #[derive(Component, Reflect, Default)]
 #[require(
-    CollisionLayers::new(GameLayer::Bouncy, LayerMask::ALL),
+    CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL),
     RigidBody::Kinematic,
     Collider::sphere(1.0)
 )]

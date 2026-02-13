@@ -5,6 +5,7 @@ use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_enhanced_input::prelude::*;
 
 use crate::{
+    GameState,
     collision::GameLayer,
     input::player::{Dash, Jump, Move, Slide, Walk, WallGrab},
     player::{PLAYER_HEIGHT, PLAYER_WIDTH},
@@ -21,7 +22,8 @@ pub(super) fn plugin(app: &mut App) {
             PlayerController::step,
             PlayerController::set_collider,
         )
-            .chain(),
+            .chain()
+            .run_if(in_state(GameState::InGame)),
     );
 }
 
