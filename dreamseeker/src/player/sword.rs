@@ -4,9 +4,11 @@ use dreamseeker_util::construct::Make;
 
 use crate::collision::GameLayer;
 
-// pub(super) fn plugin(app: &mut App) {
-//     let _ = app;
-// }
+use super::item::{Item, PlayerItems};
+
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, Sword::update);
+}
 
 #[derive(Component, Reflect, Default)]
 #[require(
@@ -29,5 +31,15 @@ impl Sword {
 
     fn make(assets: Res<AssetServer>) -> Result<impl Bundle + use<>> {
         Ok(SceneRoot(assets.load("sword.glb#Scene0")))
+    }
+
+    fn update(
+        player: Single<&PlayerItems, Changed<PlayerItems>>,
+        mut sword: Single<&mut Visibility, With<Sword>>,
+    ) {
+        **sword = match player.contains(&Item::Sword) {
+            false => Visibility::Hidden,
+            true => Visibility::Inherited,
+        };
     }
 }

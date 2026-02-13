@@ -55,6 +55,7 @@ pub enum Item {
     Ice,
     Anvil,
     Scroll,
+    Sword,
 }
 
 impl Item {
@@ -65,6 +66,7 @@ impl Item {
             Self::Ice => "Ice",
             Self::Anvil => "Anvil",
             Self::Scroll => "Ninja Scroll",
+            Self::Sword => "Sword",
         }
     }
 
@@ -79,6 +81,7 @@ impl Item {
             Self::Scroll => {
                 "You can grab on to walls!\nHold Control / Right Trigger to grab a wall"
             }
+            Self::Sword => "You can attack!\nPress Left Click / X in the air to use your sword",
         }
     }
 }

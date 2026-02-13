@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use avian3d::prelude::{Collider, CollisionStart, DebugRender, LinearVelocity};
+use avian3d::prelude::{Collider, CollisionStart, LinearVelocity};
 use bevy::{
     audio::{PlaybackMode, Volume},
     prelude::*,
@@ -15,7 +15,7 @@ use self::{
     controller::{
         JumpState, PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
     },
-    item::PlayerItems,
+    item::{Item, PlayerItems},
     sword::Sword,
 };
 
@@ -32,6 +32,7 @@ pub(super) fn plugin(app: &mut App) {
         self::camera::plugin,
         self::controller::plugin,
         self::item::plugin,
+        self::sword::plugin,
     ))
     .add_systems(
         Update,
@@ -109,10 +110,14 @@ impl Player {
 
     fn on_attack(
         _: On<Start<Attack>>,
-        mut player: Single<(&mut Player, &PlayerState, &PlayerController, &Transform)>,
+        mut player: Single<(&mut Player, &PlayerState, &PlayerItems)>,
         sounds: Res<Sounds>,
         mut cmd: Commands,
     ) -> Result {
+        if !player.2.contains(&Item::Sword) {
+            return Ok(());
+        }
+
         if player.0.attack_state == AttackState::None && matches!(player.1, PlayerState::Air(_)) {
             player.0.attack_state = AttackState::Spin;
             cmd.spawn((
@@ -188,7 +193,6 @@ impl Player {
                     ChildOf(child),
                     Transform::from_xyz(0.1, 0.2, 0.0)
                         .with_rotation(Quat::from_axis_angle(Vec3::Z, -PI / 2.0)),
-                    DebugRender::default(),
                     observers![Self::on_sword_collision],
                 ));
             }
