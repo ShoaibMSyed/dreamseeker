@@ -64,7 +64,6 @@ struct PlayerModel {
     jump: AnimationNodeIndex,
     fall: AnimationNodeIndex,
     spin: AnimationNodeIndex,
-    slash: AnimationNodeIndex,
     slam: AnimationNodeIndex,
     aplayer: Option<Entity>,
 }
@@ -74,7 +73,6 @@ enum AttackState {
     #[default]
     None,
     Spin,
-    Normal,
 }
 
 #[derive(Component, Reflect, Default)]
@@ -115,21 +113,12 @@ impl Player {
 
     fn on_attack(
         _: On<Start<Attack>>,
-        mut player: Single<(&mut Player, &PlayerState)>,
+        mut player: Single<(&mut Player, &PlayerState, &PlayerController, &Transform)>,
         sounds: Res<Sounds>,
         mut cmd: Commands,
     ) -> Result {
         if player.0.attack_state == AttackState::None && matches!(player.1, PlayerState::Air(_)) {
             player.0.attack_state = AttackState::Spin;
-            cmd.spawn((
-                AudioPlayer::new(sounds.sword_swing.clone()),
-                PlaybackSettings::DESPAWN,
-            ));
-        }
-        if player.0.attack_state == AttackState::None
-            && matches!(player.1, PlayerState::Grounded(_))
-        {
-            player.0.attack_state = AttackState::Normal;
             cmd.spawn((
                 AudioPlayer::new(sounds.sword_swing.clone()),
                 PlaybackSettings::DESPAWN,
@@ -162,7 +151,6 @@ impl Player {
         model.fall = load(0);
         model.jump = load(2);
         model.spin = load(8);
-        model.slash = load(5);
         model.slam = load(4);
 
         model.graph = graphs.add(graph);
@@ -248,17 +236,7 @@ impl Player {
         };
 
         let mut aplayer = aplayer.get_mut(aplayer_entity)?;
-        if matches!(player.4.attack_state, AttackState::Normal) {
-            if let Some(anim) = aplayer.animation(model.slash)
-                && anim.is_finished()
-            {
-                player.4.attack_state = AttackState::None;
-                aplayer.stop(model.slash);
-            } else if !aplayer.is_playing_animation(model.slash) {
-                // aplayer.stop_all();
-                aplayer.play(model.slash);
-            }
-        } else if matches!(player.4.attack_state, AttackState::Spin) {
+        if matches!(player.4.attack_state, AttackState::Spin) {
             if let Some(anim) = aplayer.animation(model.spin)
                 && anim.is_finished()
             {
@@ -383,9 +361,6 @@ impl Player {
 
     fn update_attack_state(mut player: Single<(&mut Player, &PlayerState)>) {
         if player.0.attack_state == AttackState::Spin && player.1.grounded() {
-            player.0.attack_state = AttackState::None;
-        }
-        if player.0.attack_state == AttackState::Normal && !player.1.grounded() {
             player.0.attack_state = AttackState::None;
         }
     }
