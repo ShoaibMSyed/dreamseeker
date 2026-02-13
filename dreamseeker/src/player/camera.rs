@@ -1,15 +1,12 @@
 use std::f32::consts::PI;
 
-use avian3d::prelude::{Collider, LinearVelocity};
+use avian3d::prelude::{Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter};
 use bevy::{anti_alias::fxaa::Fxaa, core_pipeline::prepass::DepthPrepass, prelude::*};
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
 
 use crate::{
-    GameState,
-    input::camera::{CenterCamera, MoveCamera, Pause},
-    ui::pause::PauseScreen,
-    util::angle::{Angle, AsAngle},
+    GameState, collision::GameLayer, input::camera::{CenterCamera, MoveCamera, Pause}, ui::pause::PauseScreen, util::angle::{Angle, AsAngle}
 };
 
 use super::{PLAYER_HEIGHT, Player, controller::PlayerController};
@@ -51,6 +48,9 @@ pub struct PlayerCamera {
 
     pub visual_rotation: Angle,
     pub visual_speed: f32,
+
+    #[reflect(ignore)]
+    pub collider: Collider,
 }
 
 impl Default for PlayerCamera {
@@ -63,6 +63,8 @@ impl Default for PlayerCamera {
 
             visual_rotation: default(),
             visual_speed: 1.0,
+
+            collider: Collider::sphere(0.25),
         }
     }
 }
@@ -181,17 +183,50 @@ impl PlayerCamera {
     fn follow_player(
         mut player_pos: Local<Vec3>,
         mut camera: Single<(&mut Transform, &PlayerCamera), Without<Player>>,
-        player: Single<(&Transform, &Collider), With<Player>>,
+        player: Single<(&Transform, &Collider, Entity), With<Player>>,
         time: Res<Time>,
+        mas: MoveAndSlide
     ) {
         let target = player.0.translation
             + Vec3::Y * (-player.1.shape().as_cuboid().unwrap().half_extents.y + PLAYER_HEIGHT);
 
         let pp = *player_pos;
         *player_pos += (target - pp) * (1.0 - f32::exp(-FOLLOW_SPEED * time.delta_secs()));
-        camera.0.translation = *player_pos + camera.1.offset();
 
-        camera.0.look_at(target, Dir3::Y);
+        let camera_offset = camera.1.offset();
+
+        // let out = mas.move_and_slide(
+        //     &camera.1.collider,
+        //     *player_pos,
+        //     Quat::default(),
+        //     camera_offset,
+        //     Duration::from_secs(1),
+        //     &MoveAndSlideConfig::default(),
+        //     &SpatialQueryFilter::from_excluded_entities([player.2])
+        //         .with_mask(GameLayer::Level),
+        //     |_| MoveAndSlideHitResponse::Accept,
+        // );
+
+        // camera.0.translation = out.position;
+
+        let hit = mas.spatial_query.cast_shape(
+            &camera.1.collider,
+            *player_pos,
+            Quat::default(),
+            Dir3::new(camera_offset).unwrap_or(Dir3::Z),
+            &ShapeCastConfig::from_max_distance(camera_offset.length()),
+            &SpatialQueryFilter::from_excluded_entities([player.2])
+                .with_mask(GameLayer::Level),
+        );
+
+        match hit {
+            None => camera.0.translation = *player_pos + camera_offset,
+            Some(hit) => {
+                camera.0.translation = *player_pos + camera_offset.normalize_or_zero() * hit.distance;
+            }
+        }
+
+        camera.0.look_at(*player_pos, Dir3::Y);
     }
 
     fn set_fov(
