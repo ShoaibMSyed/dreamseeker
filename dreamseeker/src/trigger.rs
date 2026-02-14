@@ -85,6 +85,11 @@ impl DeathTrigger {
 
 #[derive(Component, Reflect, Clone, Default)]
 #[reflect(Component, Default)]
+#[require(Transform)]
+pub struct RespawnPoint;
+
+#[derive(Component, Reflect, Clone, Default)]
+#[reflect(Component, Default)]
 #[require(
     Transform,
     Sensor,
@@ -104,14 +109,16 @@ impl RespawnTrigger {
 
     fn on_collision(
         event: On<CollisionStart>,
+        parent: Query<&ChildOf>,
         children: Query<&Children>,
-        transform: Query<&Transform>,
+        point: Query<(&RespawnPoint, &GlobalTransform)>,
         mut player: Query<&mut Player>,
     ) -> Result {
-        for desc in children.iter_descendants(event.collider1) {
-            if let Ok(transform) = transform.get(desc) {
+        let parent = parent.get(event.collider1)?.0;
+        for desc in children.iter_descendants(parent) {
+            if let Ok((_, transform)) = point.get(desc) {
                 if let Ok(mut player) = player.get_mut(event.collider2) {
-                    player.respawn = Some(transform.translation);
+                    player.respawn = Some(transform.translation());
                 }
             }
         }
@@ -135,6 +142,11 @@ impl InitialSpawn {
             .spawn((Player::bundle(), Transform::from_translation(pos + Vec3::Y)));
     }
 }
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+#[require(Transform)]
+pub struct MainSpawn;
 
 #[derive(Component, Reflect, Clone, Default)]
 #[reflect(Component, Default)]
@@ -193,5 +205,24 @@ impl InfoTrigger {
         {
             cmd.pop_screen();
         }
+    }
+}
+
+#[derive(Component, Reflect, Clone, Default)]
+#[reflect(Component, Default)]
+#[require(Transform, Sensor, CollisionEventsEnabled)]
+#[component(on_add)]
+pub struct EnableMainSpawn(pub String);
+
+impl EnableMainSpawn {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        world.commands().entity(ctx.entity).observe(Self::on_enter);
+    }
+
+    fn on_enter(event: On<CollisionStart>, mut player: Query<&mut Player>) -> Result {
+        if let Ok(mut player) = player.get_mut(event.collider2) {
+            player.main_spawn = true;
+        }
+        Ok(())
     }
 }

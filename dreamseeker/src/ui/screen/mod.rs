@@ -4,7 +4,6 @@ pub mod hud;
 pub mod info;
 pub mod item;
 pub mod pause;
-pub mod trans;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -12,7 +11,6 @@ pub(super) fn plugin(app: &mut App) {
         self::info::plugin,
         self::item::plugin,
         self::pause::plugin,
-        self::trans::plugin,
     ))
     .init_resource::<ScreenStack>();
 }
@@ -27,7 +25,9 @@ impl ScreenStack {
 }
 
 #[derive(Component, Reflect, Default)]
-pub struct Screen;
+pub struct Screen {
+    pub priority: i32,
+}
 
 pub struct PushScreen<B>(pub B);
 

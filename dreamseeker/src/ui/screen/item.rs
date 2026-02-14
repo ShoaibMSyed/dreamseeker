@@ -54,7 +54,7 @@ pub fn item_description(item: Item) -> impl Bundle {
     );
 
     (
-        ItemDescriptionScreen { cooldown: 2.0 },
+        ItemDescriptionScreen { cooldown: 1.0 },
         Node {
             width: percent(100),
             height: percent(100),

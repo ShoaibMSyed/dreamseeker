@@ -171,6 +171,10 @@ pub mod ui {
     #[action_output(Vec2)]
     pub struct Move;
 
+    #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Respawn;
+
     pub fn actions() -> impl Bundle {
         actions!(
             Screen[
@@ -186,6 +190,14 @@ pub mod ui {
                             .with(DeadZone::new(DeadZoneKind::Axial)),
                     )),
                 ),
+                (
+                    Action::<Respawn>::new(),
+                    Hold::new(1.4),
+                    bindings![
+                        KeyCode::Space,
+                        GamepadButton::East
+                    ]
+                )
             ]
         )
     }

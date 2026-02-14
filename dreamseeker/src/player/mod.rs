@@ -14,10 +14,7 @@ use crate::{
     GameState, Sounds,
     input::player::Attack,
     trigger::InitialSpawn,
-    ui::screen::{
-        ScreenCommandsExt,
-        trans::{EndTransition, TransScreen},
-    },
+    ui::trans::{EndTransition, Transition},
 };
 
 use self::{
@@ -93,6 +90,7 @@ pub struct Player {
     attack_state: AttackState,
     pub dream_tokens: u8,
     pub respawn: Option<Vec3>,
+    pub main_spawn: bool,
 }
 
 impl Player {
@@ -416,7 +414,7 @@ async fn die(task: ReactorTask) {
         Update,
         once::run(|mut cmd: Commands| {
             cmd.set_state(GameState::Cutscene);
-            cmd.push_screen(TransScreen::bundle(Respawn));
+            cmd.spawn(Transition::bundle(Respawn));
         }),
     )
     .await;

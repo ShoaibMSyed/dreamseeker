@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 
-use super::{Screen, ScreenCommandsExt};
-
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, Black::update)
         .add_observer(Black::on_end);
@@ -11,10 +9,9 @@ pub(super) fn plugin(app: &mut App) {
 pub struct EndTransition;
 
 #[derive(Component)]
-#[require(Screen)]
-pub struct TransScreen(Option<Box<dyn FnMut(&mut World) + Send + Sync>>);
+pub struct Transition(Option<Box<dyn FnMut(&mut World) + Send + Sync>>);
 
-impl TransScreen {
+impl Transition {
     pub fn bundle<M: Message + Clone>(ready_message: M) -> impl Bundle {
         let f = Box::new(move |world: &mut World| {
             world.write_message(ready_message.clone());
@@ -53,7 +50,7 @@ enum Black {
 impl Black {
     fn update(
         black: Single<(&mut Node, &mut Black, &ChildOf), With<Black>>,
-        mut trans: Query<&mut TransScreen>,
+        mut trans: Query<&mut Transition>,
         time: Res<Time>,
         mut cmd: Commands,
     ) {
@@ -82,7 +79,7 @@ impl Black {
                 *p += 350.0 * time.delta_secs();
                 if *p >= 100.0 {
                     *p = 100.0;
-                    cmd.pop_screen();
+                    cmd.entity(parent.0).despawn();
                 }
             }
         }

@@ -5,8 +5,13 @@ use avian3d::{
     prelude::{Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter},
 };
 use bevy::{
+    color::palettes::tailwind,
+    post_process::{
+        bloom::Bloom,
+        dof::{DepthOfField, DepthOfFieldMode},
+        effect_stack::ChromaticAberration,
+    },
     prelude::*,
-    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
@@ -83,10 +88,33 @@ impl PlayerCamera {
         (
             Self::default(),
             crate::input::camera::actions(),
+            Camera {
+                clear_color: ClearColorConfig::Custom(tailwind::PINK_100.into()),
+                ..default()
+            },
             Projection::Perspective(PerspectiveProjection {
                 fov: MIN_FOV,
                 ..default()
             }),
+            DistanceFog {
+                color: Color::linear_rgb(219.0 / 255.0, 151.0 / 255.0, 209.0 / 255.0),
+                falloff: FogFalloff::Linear {
+                    start: 20.0,
+                    end: 50.0,
+                },
+                ..default()
+            },
+            Bloom::NATURAL,
+            DepthOfField {
+                aperture_f_stops: 0.15,
+                mode: DepthOfFieldMode::Gaussian,
+                focal_distance: 6.0,
+                ..default()
+            },
+            ChromaticAberration {
+                intensity: 0.05,
+                ..default()
+            },
             observers![Self::on_center, Self::on_move, Self::on_pause],
         )
     }
@@ -169,18 +197,13 @@ impl PlayerCamera {
 
     fn on_pause(
         _: On<Start<Pause>>,
-        mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
         state: Res<State<GameState>>,
         mut next_state: ResMut<NextState<GameState>>,
     ) {
         if state.get() == &GameState::Paused {
             next_state.set(GameState::InGame);
-            cursor.grab_mode = CursorGrabMode::Confined;
-            cursor.visible = false;
         } else if state.get() == &GameState::InGame {
             next_state.set(GameState::Paused);
-            cursor.grab_mode = CursorGrabMode::None;
-            cursor.visible = true;
         }
     }
 

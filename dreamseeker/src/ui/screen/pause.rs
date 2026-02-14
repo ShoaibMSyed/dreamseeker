@@ -1,14 +1,22 @@
-use bevy::prelude::*;
-use dreamseeker_util::construct::Make;
+use bevy::{
+    prelude::*,
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+};
+use bevy_enhanced_input::prelude::Fire;
+use dreamseeker_util::{construct::Make, observers};
 
 use crate::{
     GameState,
-    input::ui::actions,
-    player::item::{Item, PlayerItems},
+    input::ui::{Respawn, actions},
+    player::{
+        Player,
+        item::{Item, PlayerItems},
+    },
+    trigger::MainSpawn,
 };
 
 use super::{
-    Screen,
+    Screen, ScreenHidden, ScreenShown,
     systems::{pop_screen, push_screen},
 };
 
@@ -52,6 +60,15 @@ impl PauseScreen {
             TextLayout::new(Justify::Center, LineBreak::NoWrap),
         );
 
+        let foot = (
+            Text::new("Hold Space / A to respawn in the hub"),
+            TextFont {
+                font_size: 36.0,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Center),
+        );
+
         (
             PauseScreen,
             Node {
@@ -63,7 +80,8 @@ impl PauseScreen {
             },
             BackgroundColor(Color::linear_rgba(0.0, 0.0, 0.0, 0.5)),
             actions(),
-            children![title, body],
+            observers![Self::on_respawn, Self::on_shown, Self::on_hidden],
+            children![title, body, foot],
         )
     }
 
@@ -74,6 +92,35 @@ impl PauseScreen {
         Ok(Children::spawn(SpawnIter(
             items.into_iter().map(ItemEntry::bundle),
         )))
+    }
+
+    fn on_shown(_: On<ScreenShown>, mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+    }
+
+    fn on_hidden(_: On<ScreenHidden>, mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
+        cursor.grab_mode = CursorGrabMode::Confined;
+        cursor.visible = false;
+    }
+
+    fn on_respawn(
+        _: On<Fire<Respawn>>,
+        mut player: Single<(&mut Transform, &Player)>,
+        point: Query<&GlobalTransform, With<MainSpawn>>,
+        mut cmd: Commands,
+    ) {
+        if !player.1.main_spawn {
+            return;
+        }
+
+        let Some(translation) = point.iter().next().map(|t| t.translation()) else {
+            return;
+        };
+
+        player.0.translation = translation + Vec3::Y;
+
+        cmd.set_state(GameState::InGame);
     }
 }
 
