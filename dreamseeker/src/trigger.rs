@@ -4,7 +4,11 @@ use bevy::{
     prelude::*,
 };
 
-use crate::player::{Die, Player};
+use crate::{
+    collision::GameLayer,
+    player::{Die, Player},
+    ui::screen::{ScreenCommandsExt, ScreenStack, info::InfoScreen},
+};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(FixedUpdate, check_collisions);
@@ -57,7 +61,12 @@ impl TriggerTeleport {
 
 #[derive(Component, Reflect, Clone, Default)]
 #[reflect(Component, Default)]
-#[require(Transform, Sensor, CollisionEventsEnabled)]
+#[require(
+    Transform,
+    Sensor,
+    CollisionEventsEnabled,
+    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL)
+)]
 #[component(on_add)]
 pub struct DeathTrigger;
 
@@ -71,5 +80,118 @@ impl DeathTrigger {
 
     fn on_collision(event: On<CollisionStart>, mut cmd: Commands) {
         cmd.trigger(Die(event.collider2));
+    }
+}
+
+#[derive(Component, Reflect, Clone, Default)]
+#[reflect(Component, Default)]
+#[require(
+    Transform,
+    Sensor,
+    CollisionEventsEnabled,
+    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL)
+)]
+#[component(on_add)]
+pub struct RespawnTrigger;
+
+impl RespawnTrigger {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        world
+            .commands()
+            .entity(ctx.entity)
+            .observe(Self::on_collision);
+    }
+
+    fn on_collision(
+        event: On<CollisionStart>,
+        children: Query<&Children>,
+        transform: Query<&Transform>,
+        mut player: Query<&mut Player>,
+    ) -> Result {
+        for desc in children.iter_descendants(event.collider1) {
+            if let Ok(transform) = transform.get(desc) {
+                if let Ok(mut player) = player.get_mut(event.collider2) {
+                    player.respawn = Some(transform.translation);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+#[require(Transform)]
+#[component(on_add)]
+pub struct InitialSpawn;
+
+impl InitialSpawn {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        let pos = world.get::<Transform>(ctx.entity).unwrap().translation;
+
+        world
+            .commands()
+            .spawn((Player::bundle(), Transform::from_translation(pos + Vec3::Y)));
+    }
+}
+
+#[derive(Component, Reflect, Clone, Default)]
+#[reflect(Component, Default)]
+#[require(
+    Transform,
+    Sensor,
+    CollisionEventsEnabled,
+    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL),
+    RigidBody::Static,
+    Collider::compound(vec![
+        (
+            vec3(0.0, 1.0, 0.0),
+            Quat::default(),
+            Collider::sphere(1.0),
+        )
+    ]),
+)]
+#[component(on_add)]
+pub struct InfoTrigger(pub String);
+
+impl InfoTrigger {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        let sign = world.load_asset("sign.glb#Scene0");
+
+        world
+            .commands()
+            .entity(ctx.entity)
+            .insert(SceneRoot(sign))
+            .observe(Self::on_enter)
+            .observe(Self::on_exit);
+    }
+
+    fn on_enter(
+        event: On<CollisionStart>,
+        info: Query<&InfoTrigger>,
+        player: Query<&Player>,
+        mut cmd: Commands,
+    ) -> Result {
+        if player.contains(event.collider2) {
+            let info = info.get(event.collider1)?;
+            cmd.push_screen(InfoScreen::bundle(info.0.clone()));
+        }
+        Ok(())
+    }
+
+    fn on_exit(
+        event: On<CollisionEnd>,
+        player: Query<&Player>,
+        q: Query<&InfoScreen>,
+        screen: Res<ScreenStack>,
+        mut cmd: Commands,
+    ) {
+        if player.contains(event.collider2)
+            && let Some(cur) = screen.current()
+            && q.contains(cur)
+        {
+            cmd.pop_screen();
+        }
     }
 }

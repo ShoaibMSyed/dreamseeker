@@ -1,6 +1,6 @@
 use avian3d::{
     PhysicsPlugins,
-    prelude::{DebugRender, PhysicsDebugPlugin, PhysicsGizmos},
+    prelude::{PhysicsDebugPlugin, PhysicsGizmos},
 };
 use bevy::{
     prelude::*,
@@ -14,12 +14,11 @@ use bevy_skein::SkeinPlugin;
 use dreamseeker_util::DreamSeekerUtil;
 
 use self::{
-    enemy::Enemy,
-    player::{Player, camera::PlayerCamera},
+    player::camera::PlayerCamera,
+    ui::screen::{ScreenCommandsExt, hud::HudScreen},
 };
 
 mod collision;
-mod enemy;
 mod input;
 mod player;
 mod trigger;
@@ -94,23 +93,14 @@ fn setup(
 
     cmd.spawn(PlayerCamera::bundle());
 
-    cmd.spawn((
-        Player::bundle(),
-        DebugRender::none(),
-        Transform::from_xyz(0.0, 3.0, 0.0),
-    ));
-
-    cmd.spawn((Enemy::bundle(), Transform::from_xyz(-10.0, 0.0, -10.0)));
-
     // Spawn Terrain
 
-    cmd.spawn((
-        Name::new("Scene"),
-        SceneRoot(assets.load("level.glb#Scene0")),
-    ));
+    cmd.spawn((Name::new("Scene"), SceneRoot(assets.load("hub.glb#Scene0"))));
 
     cursor.grab_mode = CursorGrabMode::Confined;
     cursor.visible = false;
+
+    cmd.push_screen(HudScreen::bundle());
 }
 
 macro_rules! sounds {

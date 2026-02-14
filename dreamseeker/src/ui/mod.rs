@@ -1,11 +1,9 @@
 use bevy::prelude::*;
 
-pub mod item;
-pub mod pause;
+pub mod screen;
+
+pub use self::screen::Screen;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins((self::item::plugin, self::pause::plugin));
+    app.add_plugins(self::screen::plugin);
 }
-
-#[derive(Component, Reflect, Default)]
-pub struct Screen;

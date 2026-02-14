@@ -7,4 +7,5 @@ pub enum GameLayer {
     Player,
     Attackable,
     Sword,
+    Sensor,
 }

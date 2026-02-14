@@ -14,7 +14,10 @@ use bevy_flurx::{
 use crate::{
     GameState, Sounds,
     collision::GameLayer,
-    ui::item::{ScreenClose, item_description},
+    ui::screen::{
+        ScreenCommandsExt,
+        item::{ItemDescriptionScreen, item_description},
+    },
 };
 
 use super::{Player, controller::PlayerControllerSettings};
@@ -122,9 +125,12 @@ impl Item {
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component, Default)]
-#[require(Name::new("Chest"), Item)]
+#[require(Name::new("Chest"), Item, ChestData)]
 #[component(on_add)]
-pub struct Chest {
+pub struct Chest;
+
+#[derive(Component, Default)]
+struct ChestData {
     open: AnimationNodeIndex,
     aplayer: Option<Entity>,
 }
@@ -167,7 +173,8 @@ impl Chest {
             }
         }
 
-        cmd.entity(event.entity).insert(Chest { open, aplayer: ap });
+        cmd.entity(event.entity)
+            .insert(ChestData { open, aplayer: ap });
     }
 
     fn on_hit(
@@ -199,7 +206,7 @@ async fn item_get_cutscene(task: ReactorTask, chest: Entity, item: Item) {
         PreUpdate,
         once::run(
             move |mut state: ResMut<NextState<GameState>>,
-                  q_chest: Query<&Chest>,
+                  q_chest: Query<&ChestData>,
                   mut aplayer: Query<&mut AnimationPlayer>,
                   mut cmd: Commands,
                   sounds: Res<Sounds>|
@@ -224,7 +231,7 @@ async fn item_get_cutscene(task: ReactorTask, chest: Entity, item: Item) {
     task.will(
         Update,
         wait::until(
-            move |q_chest: Query<&Chest>, aplayer: Query<&AnimationPlayer>| {
+            move |q_chest: Query<&ChestData>, aplayer: Query<&AnimationPlayer>| {
                 let Ok(chest) = q_chest.get(chest) else {
                     return true;
                 };
@@ -246,7 +253,7 @@ async fn item_get_cutscene(task: ReactorTask, chest: Entity, item: Item) {
     task.will(
         PreUpdate,
         once::run(move |mut cmd: Commands, sounds: Res<Sounds>| {
-            cmd.spawn(item_description(item));
+            cmd.push_screen(item_description(item));
 
             cmd.spawn((
                 AudioPlayer::new(sounds.item_get.clone()),
@@ -256,8 +263,11 @@ async fn item_get_cutscene(task: ReactorTask, chest: Entity, item: Item) {
     )
     .await;
 
-    task.will(Update, wait::message::comes::<ScreenClose>())
-        .await;
+    task.will(
+        Update,
+        wait::until(|q: Query<&ItemDescriptionScreen>| q.is_empty()),
+    )
+    .await;
 
     task.will(
         PreUpdate,

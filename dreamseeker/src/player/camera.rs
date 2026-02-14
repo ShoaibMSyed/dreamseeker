@@ -15,7 +15,6 @@ use crate::{
     GameState,
     collision::GameLayer,
     input::camera::{CenterCamera, MoveCamera, Pause},
-    ui::pause::PauseScreen,
     util::angle::{Angle, AsAngle},
 };
 
@@ -170,22 +169,16 @@ impl PlayerCamera {
 
     fn on_pause(
         _: On<Start<Pause>>,
-        screen: Query<(Entity, &PauseScreen)>,
         mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
         state: Res<State<GameState>>,
         mut next_state: ResMut<NextState<GameState>>,
-        mut cmd: Commands,
     ) {
         if state.get() == &GameState::Paused {
             next_state.set(GameState::InGame);
-            for (e, _) in screen {
-                cmd.entity(e).despawn();
-            }
             cursor.grab_mode = CursorGrabMode::Confined;
             cursor.visible = false;
         } else if state.get() == &GameState::InGame {
             next_state.set(GameState::Paused);
-            cmd.spawn(PauseScreen::bundle());
             cursor.grab_mode = CursorGrabMode::None;
             cursor.visible = true;
         }

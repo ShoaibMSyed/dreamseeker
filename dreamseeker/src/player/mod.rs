@@ -1,15 +1,24 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, time::Duration};
 
-use avian3d::prelude::{Collider, CollisionStart, LinearVelocity};
+use avian3d::prelude::{Collider, CollisionStart, LinearVelocity, Position};
 use bevy::{
     audio::{PlaybackMode, Volume},
     prelude::*,
     scene::SceneInstanceReady,
 };
 use bevy_enhanced_input::prelude::Start;
+use bevy_flurx::{prelude::Reactor, task::ReactorTask};
 use dreamseeker_util::{construct::Make, observers};
 
-use crate::{GameState, Sounds, input::player::Attack};
+use crate::{
+    GameState, Sounds,
+    input::player::Attack,
+    trigger::InitialSpawn,
+    ui::screen::{
+        ScreenCommandsExt,
+        trans::{EndTransition, TransScreen},
+    },
+};
 
 use self::{
     controller::{
@@ -34,6 +43,7 @@ pub(super) fn plugin(app: &mut App) {
         self::item::plugin,
         self::sword::plugin,
     ))
+    .add_message::<Respawn>()
     .add_systems(
         Update,
         (
@@ -82,6 +92,7 @@ enum AttackState {
 pub struct Player {
     attack_state: AttackState,
     pub dream_tokens: u8,
+    pub respawn: Option<Vec3>,
 }
 
 impl Player {
@@ -92,7 +103,7 @@ impl Player {
             // AddMesh(Cuboid::new(0.5, 1.5, 0.5)),
             // AddMaterial(Color::linear_rgb(0.1, 0.3, 0.8)),
             Collider::cuboid(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH),
-            observers![Self::on_attack],
+            observers![Self::on_attack, Self::on_die],
             children![
                 (
                     Make(Self::make_model),
@@ -255,7 +266,7 @@ impl Player {
             } else {
                 if !aplayer.is_playing_animation(model.fall) {
                     aplayer.stop_all();
-                    aplayer.play(model.fall).repeat();
+                    aplayer.play(model.fall);
                 }
             }
         } else if matches!(player.1, PlayerState::Slam(_)) {
@@ -386,7 +397,60 @@ impl Player {
             player.1.y = (-player.1.y).max(player.2.min_sword_bounce);
         }
     }
+
+    fn on_die(_: On<Die>, mut cmd: Commands) {
+        cmd.spawn(Reactor::schedule(die));
+    }
 }
 
 #[derive(EntityEvent)]
 pub struct Die(pub Entity);
+
+#[derive(Message, Clone)]
+struct Respawn;
+
+async fn die(task: ReactorTask) {
+    use bevy_flurx::prelude::*;
+
+    task.will(
+        Update,
+        once::run(|mut cmd: Commands| {
+            cmd.set_state(GameState::Cutscene);
+            cmd.push_screen(TransScreen::bundle(Respawn));
+        }),
+    )
+    .await;
+
+    task.will(Update, wait::message::comes::<Respawn>()).await;
+
+    task.will(
+        Update,
+        once::run(
+            |mut player: Single<(&mut Player, &mut Position), Without<InitialSpawn>>,
+             spawn: Query<(&Transform, &InitialSpawn)>| {
+                let point = match player.0.respawn {
+                    Some(point) => point,
+                    None => spawn
+                        .iter()
+                        .next()
+                        .map(|(t, _)| t.translation)
+                        .unwrap_or_default(),
+                };
+                player.1.0 = point + Vec3::Y * 1.0;
+            },
+        ),
+    )
+    .await;
+
+    task.will(Update, delay::time().with(Duration::from_secs_f32(0.25)))
+        .await;
+
+    task.will(
+        Update,
+        once::run(|mut cmd: Commands| {
+            cmd.trigger(EndTransition);
+            cmd.set_state(GameState::InGame);
+        }),
+    )
+    .await;
+}

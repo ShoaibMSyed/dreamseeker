@@ -2,13 +2,20 @@ use bevy::prelude::*;
 use dreamseeker_util::construct::Make;
 
 use crate::{
+    GameState,
     input::ui::actions,
     player::item::{Item, PlayerItems},
 };
 
-use super::Screen;
+use super::{
+    Screen,
+    systems::{pop_screen, push_screen},
+};
 
-pub(super) fn plugin(_app: &mut App) {}
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(OnEnter(GameState::Paused), push_screen(PauseScreen::bundle))
+        .add_systems(OnExit(GameState::Paused), pop_screen());
+}
 
 #[derive(Component, Reflect)]
 #[require(Screen)]

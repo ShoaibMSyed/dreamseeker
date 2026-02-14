@@ -7,11 +7,10 @@ use crate::{
     player::item::Item,
 };
 
-use super::Screen;
+use super::{Screen, ScreenCommandsExt};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_message::<ScreenClose>()
-        .add_systems(Update, ItemDescriptionScreen::update);
+    app.add_systems(Update, ItemDescriptionScreen::update);
 }
 
 pub fn item_description(item: Item) -> impl Bundle {
@@ -69,9 +68,6 @@ pub fn item_description(item: Item) -> impl Bundle {
     )
 }
 
-#[derive(Message)]
-pub struct ScreenClose;
-
 #[derive(Component)]
 #[require(Screen)]
 pub struct ItemDescriptionScreen {
@@ -86,8 +82,7 @@ impl ItemDescriptionScreen {
     ) -> Result {
         let screen = screen.get(event.context)?;
         if screen.cooldown <= 0.0 {
-            cmd.write_message(ScreenClose);
-            cmd.entity(event.context).despawn();
+            cmd.pop_screen();
         }
         Ok(())
     }
