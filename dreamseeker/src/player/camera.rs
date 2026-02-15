@@ -19,7 +19,8 @@ use dreamseeker_util::observers;
 use crate::{
     GameState,
     collision::GameLayer,
-    input::camera::{CenterCamera, MoveCamera, Pause},
+    input::camera::{CenterCamera, MoveCamera, Pause, Tp},
+    ui::screen::{ScreenCommandsExt, pause::PauseScreen, teleport::TeleportScreen},
     util::angle::{Angle, AsAngle},
 };
 
@@ -115,7 +116,7 @@ impl PlayerCamera {
                 intensity: 0.05,
                 ..default()
             },
-            observers![Self::on_center, Self::on_move, Self::on_pause],
+            observers![Self::on_center, Self::on_move, Self::on_pause, Self::on_tp],
         )
     }
 
@@ -195,15 +196,17 @@ impl PlayerCamera {
         camera.apply(event.value, time.delta_secs());
     }
 
-    fn on_pause(
-        _: On<Start<Pause>>,
-        state: Res<State<GameState>>,
-        mut next_state: ResMut<NextState<GameState>>,
-    ) {
+    fn on_pause(_: On<Start<Pause>>, mut cmd: Commands, state: Res<State<GameState>>) {
         if state.get() == &GameState::Paused {
-            next_state.set(GameState::InGame);
+            cmd.pop_screen();
         } else if state.get() == &GameState::InGame {
-            next_state.set(GameState::Paused);
+            cmd.push_screen(PauseScreen::bundle());
+        }
+    }
+
+    fn on_tp(_: On<Start<Tp>>, mut cmd: Commands, state: Res<State<GameState>>) {
+        if state.get() == &GameState::InGame {
+            cmd.push_screen(TeleportScreen::bundle());
         }
     }
 

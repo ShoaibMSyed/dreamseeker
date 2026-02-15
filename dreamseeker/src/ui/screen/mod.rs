@@ -4,6 +4,7 @@ pub mod hud;
 pub mod info;
 pub mod item;
 pub mod pause;
+pub mod teleport;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -11,6 +12,7 @@ pub(super) fn plugin(app: &mut App) {
         self::info::plugin,
         self::item::plugin,
         self::pause::plugin,
+        self::teleport::plugin,
     ))
     .init_resource::<ScreenStack>();
 }
@@ -85,19 +87,3 @@ pub struct ScreenHidden(pub Entity);
 
 #[derive(EntityEvent, Clone)]
 pub struct ScreenShown(pub Entity);
-
-pub mod systems {
-    use bevy::ecs::{bundle::Bundle, system::Commands};
-
-    use super::ScreenCommandsExt;
-
-    pub fn push_screen<B: Bundle>(constructor: impl Fn() -> B) -> impl Fn(Commands) {
-        move |mut cmd: Commands| {
-            cmd.push_screen(constructor());
-        }
-    }
-
-    pub fn pop_screen() -> impl Fn(Commands) {
-        move |mut cmd: Commands| cmd.pop_screen()
-    }
-}

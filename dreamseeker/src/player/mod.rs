@@ -13,7 +13,7 @@ use dreamseeker_util::{construct::Make, observers};
 use crate::{
     GameState, Sounds,
     input::player::Attack,
-    trigger::InitialSpawn,
+    trigger::{Checkpoint, InitialSpawn},
     ui::trans::{EndTransition, Transition},
 };
 
@@ -89,8 +89,7 @@ enum AttackState {
 pub struct Player {
     attack_state: AttackState,
     pub dream_tokens: u8,
-    pub respawn: Option<Vec3>,
-    pub main_spawn: bool,
+    pub last_checkpoint: Option<Entity>,
 }
 
 impl Player {
@@ -425,9 +424,13 @@ async fn die(task: ReactorTask) {
         Update,
         once::run(
             |mut player: Single<(&mut Player, &mut Position), Without<InitialSpawn>>,
-             spawn: Query<(&Transform, &InitialSpawn)>| {
-                let point = match player.0.respawn {
-                    Some(point) => point,
+             spawn: Query<(&Transform, &InitialSpawn)>,
+             checkpoints: Query<(&GlobalTransform, &Checkpoint)>| {
+                let point = match player.0.last_checkpoint {
+                    Some(point) => checkpoints
+                        .get(point)
+                        .map(|p| p.0.translation())
+                        .unwrap_or_default(),
                     None => spawn
                         .iter()
                         .next()

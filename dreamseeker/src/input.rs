@@ -27,6 +27,10 @@ pub mod camera {
     pub struct Pause;
 
     #[derive(InputAction)]
+    #[action_output(bool)]
+    pub struct Tp;
+
+    #[derive(InputAction)]
     #[action_output(Vec2)]
     pub struct MoveCamera;
 
@@ -63,7 +67,14 @@ pub mod camera {
                     GamepadButton::Start,
                     KeyCode::Escape,
                 ],
-            )
+            ),
+            (
+                Action::<Tp>::new(),
+                bindings![
+                    GamepadButton::Select,
+                    KeyCode::KeyT,
+                ],
+            ),
         ])
     }
 }

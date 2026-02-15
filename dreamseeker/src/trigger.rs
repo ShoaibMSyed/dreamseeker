@@ -83,50 +83,6 @@ impl DeathTrigger {
     }
 }
 
-#[derive(Component, Reflect, Clone, Default)]
-#[reflect(Component, Default)]
-#[require(Transform)]
-pub struct RespawnPoint;
-
-#[derive(Component, Reflect, Clone, Default)]
-#[reflect(Component, Default)]
-#[require(
-    Transform,
-    Sensor,
-    CollisionEventsEnabled,
-    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL)
-)]
-#[component(on_add)]
-pub struct RespawnTrigger;
-
-impl RespawnTrigger {
-    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
-        world
-            .commands()
-            .entity(ctx.entity)
-            .observe(Self::on_collision);
-    }
-
-    fn on_collision(
-        event: On<CollisionStart>,
-        parent: Query<&ChildOf>,
-        children: Query<&Children>,
-        point: Query<(&RespawnPoint, &GlobalTransform)>,
-        mut player: Query<&mut Player>,
-    ) -> Result {
-        let parent = parent.get(event.collider1)?.0;
-        for desc in children.iter_descendants(parent) {
-            if let Ok((_, transform)) = point.get(desc) {
-                if let Ok(mut player) = player.get_mut(event.collider2) {
-                    player.respawn = Some(transform.translation());
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Component, Reflect, Default)]
 #[reflect(Component, Default)]
 #[require(Transform)]
@@ -142,11 +98,6 @@ impl InitialSpawn {
             .spawn((Player::bundle(), Transform::from_translation(pos + Vec3::Y)));
     }
 }
-
-#[derive(Component, Reflect, Default)]
-#[reflect(Component, Default)]
-#[require(Transform)]
-pub struct MainSpawn;
 
 #[derive(Component, Reflect, Clone, Default)]
 #[reflect(Component, Default)]
@@ -210,19 +161,68 @@ impl InfoTrigger {
 
 #[derive(Component, Reflect, Clone, Default)]
 #[reflect(Component, Default)]
-#[require(Transform, Sensor, CollisionEventsEnabled)]
+#[require(
+    Transform,
+    Sensor,
+    CollisionEventsEnabled,
+    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL),
+    RigidBody::Static,
+    Collider::compound(vec![
+        (
+            vec3(0.0, 1.5, 0.0),
+            Quat::default(),
+            Collider::sphere(1.5),
+        )
+    ]),
+)]
 #[component(on_add)]
-pub struct EnableMainSpawn(pub String);
+pub struct Checkpoint {
+    pub id: String,
+    pub checked: bool,
+}
 
-impl EnableMainSpawn {
+impl Checkpoint {
     fn on_add(mut world: DeferredWorld, ctx: HookContext) {
-        world.commands().entity(ctx.entity).observe(Self::on_enter);
+        let sign = world.load_asset("checkpoint.glb#Scene0");
+
+        world
+            .commands()
+            .entity(ctx.entity)
+            .insert(SceneRoot(sign))
+            .observe(Self::on_enter)
+            .observe(Self::on_exit);
     }
 
-    fn on_enter(event: On<CollisionStart>, mut player: Query<&mut Player>) -> Result {
+    fn on_enter(
+        event: On<CollisionStart>,
+        mut q: Query<&mut Checkpoint>,
+        mut player: Query<&mut Player>,
+        mut cmd: Commands,
+    ) -> Result {
         if let Ok(mut player) = player.get_mut(event.collider2) {
-            player.main_spawn = true;
+            let mut checkpoint = q.get_mut(event.collider1)?;
+            player.last_checkpoint = Some(event.collider1);
+            cmd.push_screen(InfoScreen::bundle(format!(
+                "Checkpoint {} unlocked. Press T / Select to open the teleport menu",
+                checkpoint.id
+            )));
+            checkpoint.checked = true;
         }
         Ok(())
+    }
+
+    fn on_exit(
+        event: On<CollisionEnd>,
+        player: Query<&Player>,
+        q: Query<&InfoScreen>,
+        screen: Res<ScreenStack>,
+        mut cmd: Commands,
+    ) {
+        if player.contains(event.collider2)
+            && let Some(cur) = screen.current()
+            && q.contains(cur)
+        {
+            cmd.pop_screen();
+        }
     }
 }
