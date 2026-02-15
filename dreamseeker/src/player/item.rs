@@ -1,3 +1,5 @@
+use std::{f32::consts::PI, time::Duration};
+
 use avian3d::prelude::*;
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
@@ -6,7 +8,7 @@ use bevy::{
     scene::SceneInstanceReady,
 };
 use bevy_flurx::{
-    action::{once, wait},
+    action::{delay, once, wait},
     prelude::Reactor,
     task::ReactorTask,
 };
@@ -23,8 +25,10 @@ use crate::{
 use super::{Player, controller::PlayerControllerSettings};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_observer(Chest::on_hit)
-        .add_systems(Update, PlayerItems::on_update);
+    app.add_observer(Chest::on_hit).add_systems(
+        Update,
+        (PlayerItems::on_update, PlayerItems::give_all, Token::update),
+    );
 }
 
 #[derive(Component, Reflect, Default)]
@@ -35,7 +39,12 @@ pub(super) fn plugin(app: &mut App) {
     RigidBody::Static,
     Collider::sphere(0.5),
     CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL),
-    CollisionEventsEnabled
+    CollisionEventsEnabled,
+    PointLight {
+        color: Color::linear_rgb(0.2, 0.5, 1.0),
+        intensity: 4000.0,
+        ..default()
+    },
 )]
 #[component(on_add)]
 pub struct Token;
@@ -50,14 +59,44 @@ impl Token {
             .insert(scene);
     }
 
-    fn on_hit(event: On<CollisionStart>, mut player: Query<&mut Player>, mut cmd: Commands) {
+    fn on_hit(
+        event: On<CollisionStart>,
+        mut player: Query<&mut Player>,
+        mut transform: Query<&mut Position>,
+        sounds: Res<Sounds>,
+        mut cmd: Commands,
+    ) {
         let Ok(mut player) = player.get_mut(event.collider2) else {
             return;
         };
 
         player.dream_tokens += 1;
 
-        cmd.entity(event.collider1).despawn();
+        cmd.spawn((AudioPlayer(sounds.token.clone()), PlaybackSettings::DESPAWN));
+
+        let entity = event.collider1;
+
+        cmd.entity(entity).remove::<CollisionEventsEnabled>();
+
+        if let Ok(mut transform) = transform.get_mut(entity) {
+            transform.y += 1.5;
+        }
+
+        cmd.spawn(Reactor::schedule(async move |task| {
+            task.will(Update, delay::time().with(Duration::from_secs_f32(1.0)))
+                .await;
+            task.will(
+                Update,
+                once::run(move |mut cmd: Commands| cmd.entity(entity).despawn()),
+            )
+            .await;
+        }));
+    }
+
+    fn update(token: Query<&mut Transform, With<Token>>, time: Res<Time>) {
+        for mut transform in token {
+            transform.rotate_y(2.0 * PI * time.delta_secs());
+        }
     }
 }
 
@@ -79,6 +118,14 @@ impl PlayerItems {
         player.0.slam_enabled = player.1.contains(&Item::Anvil);
         player.0.wall_grab_enabled = player.1.contains(&Item::Scroll);
     }
+
+    fn give_all(mut player: Single<&mut PlayerItems>, keys: Res<ButtonInput<KeyCode>>) {
+        if cfg!(debug_assertions) && keys.just_pressed(KeyCode::KeyG) {
+            for item in Item::ALL {
+                player.insert(item);
+            }
+        }
+    }
 }
 
 #[derive(Component, Reflect, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -96,6 +143,17 @@ pub enum Item {
 }
 
 impl Item {
+    pub const ALL: [Self; 8] = [
+        Self::Cloud1,
+        Self::Cloud2,
+        Self::Cloud3,
+        Self::Rocket,
+        Self::Ice,
+        Self::Anvil,
+        Self::Scroll,
+        Self::Sword,
+    ];
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::Cloud1 | Self::Cloud2 | Self::Cloud3 => "Cloud",
@@ -118,7 +176,9 @@ impl Item {
             Self::Scroll => {
                 "You can grab on to walls!\nHold Control / Right Trigger to grab a wall"
             }
-            Self::Sword => "You can attack!\nPress Left Click / X in the air to use your sword",
+            Self::Sword => {
+                "You can pogo off of RED objects!\nPress Left Click / X in the air to use your sword"
+            }
         }
     }
 }

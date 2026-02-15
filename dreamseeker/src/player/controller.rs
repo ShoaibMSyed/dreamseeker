@@ -15,16 +15,18 @@ use crate::{
 use super::{PlayerModel, camera::PlayerCamera};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_message::<PlayerControllerMessage>().add_systems(
-        FixedUpdate,
-        (
-            PlayerInput::gather,
-            PlayerController::step,
-            PlayerController::set_collider,
-        )
-            .chain()
-            .run_if(in_state(GameState::InGame)),
-    );
+    app.add_message::<PlayerControllerMessage>()
+        .add_systems(Update, PlayerInput::flycam)
+        .add_systems(
+            FixedUpdate,
+            (
+                PlayerInput::gather,
+                PlayerController::step,
+                PlayerController::set_collider,
+            )
+                .chain()
+                .run_if(in_state(GameState::InGame)),
+        );
 }
 
 #[derive(Component, Reflect)]
@@ -35,6 +37,8 @@ pub struct PlayerControllerSettings {
     pub jump: f32,
     pub min_floor_angle: f32,
     pub maximum_grounded_up_velocity: f32,
+
+    pub flycam: bool,
 
     pub coyote_time: f32,
     pub air_friction: f32,
@@ -61,6 +65,7 @@ pub struct PlayerControllerSettings {
     pub slam_enabled: bool,
     pub slam_pause: f32,
     pub slam_velocity: f32,
+    pub slam_jump_boost: f32,
 
     pub wall_grab_enabled: bool,
     pub wall_grab_min_normal: f32,
@@ -84,6 +89,8 @@ impl Default for PlayerControllerSettings {
             jump: 1.0,
             min_floor_angle: 0.7,
             maximum_grounded_up_velocity: 5.8,
+
+            flycam: false,
 
             coyote_time: (1.0 / 64.0) * 5.0,
             air_friction: 0.3,
@@ -109,6 +116,7 @@ impl Default for PlayerControllerSettings {
             slam_enabled: true,
             slam_pause: 0.5,
             slam_velocity: 20.0,
+            slam_jump_boost: 2.0,
 
             wall_grab_enabled: true,
             wall_grab_min_normal: -0.1,
@@ -136,6 +144,12 @@ pub struct PlayerInput {
 }
 
 impl PlayerInput {
+    fn flycam(mut pcs: Single<&mut PlayerControllerSettings>, keys: Res<ButtonInput<KeyCode>>) {
+        if keys.just_pressed(KeyCode::KeyH) {
+            pcs.flycam = !pcs.flycam;
+        }
+    }
+
     fn gather(
         mut pi: Single<(&mut PlayerController, &mut PlayerInput, &PlayerState)>,
         camera: Single<&PlayerCamera>,
@@ -183,6 +197,7 @@ pub enum JumpState {
 #[derive(Reflect, Clone, Default)]
 pub struct GroundedState {
     pub frame_count: u8,
+    pub jump_boost: bool,
 }
 
 #[derive(Reflect, Clone, Default)]
@@ -351,6 +366,19 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
     }
 
     fn step(&mut self, state: &mut PlayerState) {
+        if self.settings.flycam {
+            let mut dir = vec3(self.input.movement.x, 0.0, self.input.movement.y);
+            if self.input.jump.contains(ActionEvents::FIRE) {
+                dir.y += 1.0;
+            }
+            if self.input.slide.contains(ActionEvents::FIRE) {
+                dir.y -= 1.0;
+            }
+            self.data.transform.translation += dir * self.dt * 20.0;
+
+            return;
+        }
+
         self.half_gravity(state);
 
         self.update_state(state);
@@ -385,7 +413,7 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         if too_fast {
             if !coyote_friction {
-                // TODO: Framerate independent friction
+                // TODO: Tickrate independent friction
                 self.velocity.0 /= 1.5;
             }
 
@@ -571,6 +599,10 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
 
         if let Some(hit_point) = hit_point {
             self.msg.write(PlayerControllerMessage::Slam(hit_point));
+            self.check_grounded(state);
+            if let PlayerState::Grounded(gstate) = state {
+                gstate.jump_boost = true;
+            }
         }
     }
 
@@ -690,7 +722,19 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
     }
 
     fn ground_jump(&mut self, state: &mut PlayerState) {
-        self.velocity.y = (2.0 * self.settings.gravity * self.settings.jump).sqrt();
+        let boost = if let PlayerState::Grounded(g) = state {
+            g.jump_boost
+        } else {
+            false
+        };
+
+        let boost = if boost {
+            self.settings.slam_jump_boost
+        } else {
+            0.0
+        };
+
+        self.velocity.y = (2.0 * self.settings.gravity * (self.settings.jump + boost)).sqrt();
         *state = PlayerState::Air(AirState {
             jump_state: JumpState::Normal,
             ..default()

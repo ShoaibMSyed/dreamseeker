@@ -57,7 +57,7 @@ impl Plugin for DreamSeeker {
         *app.world_mut()
             .resource_mut::<GizmoConfigStore>()
             .config_mut::<PhysicsGizmos>()
-            .1 = PhysicsGizmos::none();
+            .1 = PhysicsGizmos::default();
 
         app.init_resource::<Sounds>()
             .init_state::<GameState>()
@@ -129,5 +129,6 @@ sounds!(
     item_get,
     jump,
     sword_hit,
-    sword_swing
+    sword_swing,
+    token,
 );
