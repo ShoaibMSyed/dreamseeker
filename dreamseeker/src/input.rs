@@ -66,6 +66,7 @@ pub mod camera {
                 bindings![
                     GamepadButton::Start,
                     KeyCode::Escape,
+                    KeyCode::KeyQ,
                 ],
             ),
             (

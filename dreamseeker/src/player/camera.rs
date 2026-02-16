@@ -5,13 +5,11 @@ use avian3d::{
     prelude::{Collider, LinearVelocity, MoveAndSlide, ShapeCastConfig, SpatialQueryFilter},
 };
 use bevy::{
-    color::palettes::tailwind,
-    post_process::{
+    color::palettes::tailwind, input::mouse::MouseWheel, post_process::{
         bloom::Bloom,
         dof::{DepthOfField, DepthOfFieldMode},
         effect_stack::ChromaticAberration,
-    },
-    prelude::*,
+    }, prelude::*
 };
 use bevy_enhanced_input::prelude::*;
 use dreamseeker_util::observers;
@@ -47,6 +45,7 @@ pub(super) fn plugin(app: &mut App) {
             PlayerCamera::system,
             PlayerCamera::follow_player,
             PlayerCamera::set_fov,
+            PlayerCamera::change_sens,
         )
             .run_if(not(in_state(GameState::Paused))),
     );
@@ -65,6 +64,8 @@ pub struct PlayerCamera {
 
     pub follow_speed: f32,
 
+    pub sensitivity: f32,
+
     #[reflect(ignore)]
     pub collider: Collider,
 }
@@ -81,6 +82,8 @@ impl Default for PlayerCamera {
             visual_speed: 1.0,
 
             follow_speed: 8.0,
+
+            sensitivity: 1.0,
 
             collider: Collider::sphere(0.25),
         }
@@ -135,7 +138,7 @@ impl PlayerCamera {
         }
 
         let zoom_step = ZOOM_SPEED * -cstick.y * dt;
-        let pan_step = PAN_SPEED.to_radians() * cstick.x * dt;
+        let pan_step = PAN_SPEED.to_radians() * cstick.x * self.sensitivity * dt;
 
         self.zoom = (self.zoom + zoom_step).clamp(0.0, 1.0);
 
@@ -298,5 +301,20 @@ impl PlayerCamera {
         *fov += (target_fov - *fov) * (1.0 - f32::exp(-FOV_SPEED * time.delta_secs()));
 
         proj.fov = *fov;
+    }
+
+    fn change_sens(
+        mut msgs: MessageReader<MouseWheel>,
+        mut camera: Single<&mut PlayerCamera>,
+    ) {
+        for msg in msgs.read() {
+            camera.sensitivity += msg.y;
+            if camera.sensitivity < 0.5 {
+                camera.sensitivity = 0.25;
+            }
+            if camera.sensitivity > 8.0 {
+                camera.sensitivity = 8.0;
+            }
+        }
     }
 }
