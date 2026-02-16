@@ -15,7 +15,7 @@ pub struct HudScreen;
 impl HudScreen {
     pub fn bundle() -> impl Bundle {
         let tokens = (
-            Text::new("0 / 10 tokens"),
+            Text::new("0 tokens"),
             TextFont::from_font_size(20.0),
             TokenCounter,
         );
@@ -39,7 +39,7 @@ struct TokenCounter;
 impl TokenCounter {
     fn update(text: Query<(&mut Text, &TokenCounter)>, player: Single<&Player, Changed<Player>>) {
         for (mut text, _) in text {
-            text.0 = format!("{} / 10 tokens", player.dream_tokens);
+            text.0 = format!("{} tokens", player.dream_tokens);
         }
     }
 }

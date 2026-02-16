@@ -5,14 +5,18 @@ use bevy::{
 };
 
 use crate::{
+    GameState,
     collision::GameLayer,
     player::{Die, Player},
-    ui::screen::{ScreenCommandsExt, ScreenStack, info::InfoScreen},
+    ui::screen::{ScreenCommandsExt, ScreenStack, end::EndScreen, info::InfoScreen},
 };
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(FixedUpdate, (check_collisions, Blink::update))
-        .add_systems(Update, Checkpoint::give_all);
+    app.add_systems(
+        FixedUpdate,
+        (check_collisions, Blink::update).run_if(in_state(GameState::InGame)),
+    )
+    .add_systems(Update, Checkpoint::give_all);
 }
 
 fn check_collisions(
@@ -274,3 +278,44 @@ impl Blink {
 #[reflect(Component, Default)]
 #[require(CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL))]
 pub struct Bouncy;
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct CameraNoClip;
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+#[require(
+    Sensor,
+    RigidBody::Static,
+    Collider::compound(vec![(
+        vec3(0.0, 2.0, 0.0),
+        Quat::default(),
+        Collider::cuboid(3.0, 4.0, 0.5),
+    )]),
+    CollisionLayers::new(GameLayer::Sensor, LayerMask::ALL),
+    CollisionEventsEnabled,
+)]
+#[component(on_add)]
+pub struct Door;
+
+impl Door {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        let scene = world.load_asset("door.glb#Scene0");
+
+        world
+            .commands()
+            .entity(ctx.entity)
+            .observe(Self::on_enter)
+            .insert(SceneRoot(scene));
+    }
+
+    fn on_enter(event: On<CollisionStart>, player: Query<&Player>, mut cmd: Commands) -> Result {
+        if let Ok(player) = player.get(event.collider2) {
+            if player.dream_tokens >= 10 {
+                cmd.push_screen(EndScreen::bundle());
+            }
+        }
+        Ok(())
+    }
+}

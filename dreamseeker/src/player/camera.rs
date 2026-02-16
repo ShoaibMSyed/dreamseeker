@@ -20,6 +20,7 @@ use crate::{
     GameState,
     collision::GameLayer,
     input::camera::{CenterCamera, MoveCamera, Pause, Tp},
+    trigger::CameraNoClip,
     ui::screen::{ScreenCommandsExt, pause::PauseScreen, teleport::TeleportScreen},
     util::angle::{Angle, AsAngle},
 };
@@ -220,6 +221,7 @@ impl PlayerCamera {
         mut player_pos: Local<Vec3>,
         mut camera: Single<(&mut Transform, &PlayerCamera), Without<Player>>,
         player: Single<(&Transform, &Collider, Entity), With<Player>>,
+        excluded: Query<Entity, With<CameraNoClip>>,
         time: Res<Time>,
         mas: MoveAndSlide,
     ) {
@@ -245,12 +247,16 @@ impl PlayerCamera {
 
         // camera.0.translation = out.position;
 
+        let filter =
+            SpatialQueryFilter::from_excluded_entities(std::iter::once(player.2).chain(excluded))
+                .with_mask(GameLayer::Level);
+
         let offset = mas.depenetrate(
             &camera.1.collider,
             *player_pos,
             Quat::default(),
             &DepenetrationConfig::default(),
-            &SpatialQueryFilter::from_excluded_entities([player.2]).with_mask(GameLayer::Level),
+            &filter,
         );
 
         let hit = mas.spatial_query.cast_shape(
@@ -259,7 +265,7 @@ impl PlayerCamera {
             Quat::default(),
             Dir3::new(camera_offset).unwrap_or(Dir3::Z),
             &ShapeCastConfig::from_max_distance(camera_offset.length()),
-            &SpatialQueryFilter::from_excluded_entities([player.2]).with_mask(GameLayer::Level),
+            &filter,
         );
 
         match hit {

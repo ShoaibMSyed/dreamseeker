@@ -184,7 +184,7 @@ pub mod ui {
 
     #[derive(InputAction)]
     #[action_output(bool)]
-    pub struct Respawn;
+    pub struct NewGame;
 
     pub fn actions() -> impl Bundle {
         actions!(
@@ -202,13 +202,9 @@ pub mod ui {
                     )),
                 ),
                 (
-                    Action::<Respawn>::new(),
-                    Hold::new(1.4),
-                    bindings![
-                        KeyCode::Space,
-                        GamepadButton::East
-                    ]
-                )
+                    Action::<NewGame>::new(),
+                    bindings![MouseButton::Right, GamepadButton::West],
+                ),
             ]
         )
     }

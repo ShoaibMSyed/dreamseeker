@@ -520,7 +520,6 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
                 // Air Jump
                 self.data.velocity.y =
                     (2.0 * self.data.settings.gravity * self.data.settings.jump).sqrt();
-                astate.air_jumps += 1;
                 astate.jump_state = JumpState::Normal;
 
                 // Forward Boost

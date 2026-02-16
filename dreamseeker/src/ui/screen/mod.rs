@@ -1,5 +1,6 @@
 use bevy::{ecs::entity_disabling::Disabled, prelude::*};
 
+pub mod end;
 pub mod hud;
 pub mod info;
 pub mod item;
@@ -8,6 +9,7 @@ pub mod teleport;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
+        self::end::plugin,
         self::hud::plugin,
         self::info::plugin,
         self::item::plugin,

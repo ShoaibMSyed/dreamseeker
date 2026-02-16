@@ -11,7 +11,7 @@ use bevy_flurx::FlurxPlugin;
 use bevy_framepace::FramepacePlugin;
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_skein::SkeinPlugin;
-use dreamseeker_util::DreamSeekerUtil;
+use dreamseeker_util::{DreamSeekerUtil, construct::Make};
 
 use self::{
     player::camera::PlayerCamera,
@@ -73,11 +73,7 @@ pub enum GameState {
     Paused,
 }
 
-fn setup(
-    mut cmd: Commands,
-    assets: Res<AssetServer>,
-    mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
-) {
+fn setup(mut cmd: Commands, mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
     cmd.insert_resource(GlobalAmbientLight {
         brightness: 200.0,
         ..default()
@@ -88,19 +84,32 @@ fn setup(
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(-10.0, 10.0, 0.0).looking_at(Vec3::ZERO, Dir3::Y),
+        Transform::from_xyz(-10.0, 10.0, 5.0).looking_at(Vec3::ZERO, Dir3::Y),
     ));
 
     cmd.spawn(PlayerCamera::bundle());
 
     // Spawn Terrain
 
-    cmd.spawn((Name::new("Scene"), SceneRoot(assets.load("hub.glb#Scene0"))));
+    cmd.spawn(MainScene::bundle());
 
     cursor.grab_mode = CursorGrabMode::Confined;
     cursor.visible = false;
 
     cmd.push_screen(HudScreen::bundle());
+}
+
+#[derive(Component)]
+pub struct MainScene;
+
+impl MainScene {
+    pub fn bundle() -> impl Bundle {
+        (Self, Name::new("Scene"), Make(Self::make))
+    }
+
+    fn make(assets: Res<AssetServer>) -> Result<impl Bundle + use<>> {
+        Ok(SceneRoot(assets.load("hub.glb#Scene0")))
+    }
 }
 
 macro_rules! sounds {
