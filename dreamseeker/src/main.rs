@@ -1,7 +1,4 @@
-use avian3d::{
-    PhysicsPlugins,
-    prelude::{PhysicsDebugPlugin, PhysicsGizmos},
-};
+use avian3d::PhysicsPlugins;
 use bevy::{
     prelude::*,
     window::{CursorGrabMode, CursorOptions, PrimaryWindow},
@@ -46,18 +43,12 @@ impl Plugin for DreamSeeker {
         app.add_plugins((
             EnhancedInputPlugin,
             PhysicsPlugins::default(),
-            PhysicsDebugPlugin,
             DreamSeekerUtil,
             self::input::plugin,
             self::player::plugin,
             self::trigger::plugin,
             self::ui::plugin,
         ));
-
-        *app.world_mut()
-            .resource_mut::<GizmoConfigStore>()
-            .config_mut::<PhysicsGizmos>()
-            .1 = PhysicsGizmos::default();
 
         app.init_resource::<Sounds>()
             .init_state::<GameState>()

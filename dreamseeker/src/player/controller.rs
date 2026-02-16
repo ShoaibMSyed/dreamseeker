@@ -145,7 +145,7 @@ pub struct PlayerInput {
 
 impl PlayerInput {
     fn flycam(mut pcs: Single<&mut PlayerControllerSettings>, keys: Res<ButtonInput<KeyCode>>) {
-        if keys.just_pressed(KeyCode::KeyH) {
+        if keys.just_pressed(KeyCode::KeyH) && cfg!(debug_assertions) {
             pcs.flycam = !pcs.flycam;
         }
     }
