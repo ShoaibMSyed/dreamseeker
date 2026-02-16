@@ -18,6 +18,7 @@ use crate::{
 };
 
 use self::{
+    camera::PlayerCamera,
     controller::{
         JumpState, PlayerController, PlayerControllerMessage, PlayerControllerSettings, PlayerState,
     },
@@ -425,7 +426,8 @@ async fn die(task: ReactorTask) {
         once::run(
             |mut player: Single<(&mut Player, &mut Position), Without<InitialSpawn>>,
              spawn: Query<(&Transform, &InitialSpawn)>,
-             checkpoints: Query<(&GlobalTransform, &Checkpoint)>| {
+             checkpoints: Query<(&GlobalTransform, &Checkpoint)>,
+             mut camera: Single<&mut PlayerCamera>| {
                 let point = match player.0.last_checkpoint {
                     Some(point) => checkpoints
                         .get(point)
@@ -438,6 +440,7 @@ async fn die(task: ReactorTask) {
                         .unwrap_or_default(),
                 };
                 player.1.0 = point + Vec3::Y * 1.0;
+                camera.follow_speed = 100.0;
             },
         ),
     )
@@ -448,9 +451,10 @@ async fn die(task: ReactorTask) {
 
     task.will(
         Update,
-        once::run(|mut cmd: Commands| {
+        once::run(|mut cmd: Commands, mut camera: Single<&mut PlayerCamera>| {
             cmd.trigger(EndTransition);
             cmd.set_state(GameState::InGame);
+            camera.follow_speed = 8.0;
         }),
     )
     .await;

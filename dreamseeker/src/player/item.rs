@@ -170,14 +170,18 @@ impl Item {
             Self::Cloud1 | Self::Cloud2 | Self::Cloud3 => {
                 "You gained an additional jump!\nYou can jump again while you are in the air"
             }
-            Self::Rocket => "You can air dash!\nPress Right-Click / X in the air to dash forward.",
-            Self::Ice => "You can slide!\nPress Shift / A to slide along the ground",
-            Self::Anvil => "You can slam!\nPress Shift / A in the air to slam into the ground",
+            Self::Rocket => "You can air dash!\nPress Right-Click / X in the air to dash forward",
+            Self::Ice => {
+                "You can slide!\nPress Shift / A to slide along the ground. Jumping out of a slide gives you extra momentum"
+            }
+            Self::Anvil => {
+                "You can slam!\nPress Shift / A in the air to slam into the ground. Jumping after a slam gives you extra height"
+            }
             Self::Scroll => {
-                "You can grab on to walls!\nHold Control / Right Trigger to grab a wall"
+                "You can grab on to walls!\nHold Control / Right Trigger to grab a wall\nHolding a wall refreshes your air jumps"
             }
             Self::Sword => {
-                "You can pogo off of RED objects!\nPress Left Click / X in the air to use your sword"
+                "You can pogo off of RED objects!\nPress Left Click / X in the air to use your sword\nPogoing refreshes all your abilities"
             }
         }
     }

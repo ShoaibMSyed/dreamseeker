@@ -11,7 +11,8 @@ use crate::{
 };
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(FixedUpdate, check_collisions);
+    app.add_systems(FixedUpdate, (check_collisions, Blink::update))
+        .add_systems(Update, Checkpoint::give_all);
 }
 
 fn check_collisions(
@@ -225,4 +226,51 @@ impl Checkpoint {
             cmd.pop_screen();
         }
     }
+
+    fn give_all(keys: Res<ButtonInput<KeyCode>>, q: Query<&mut Checkpoint>) {
+        if keys.just_pressed(KeyCode::KeyY) && cfg!(debug_assertions) {
+            for mut c in q {
+                c.checked = true;
+            }
+        }
+    }
 }
+
+#[derive(Component, Reflect)]
+#[reflect(Component, Default)]
+pub struct Blink {
+    pub countdown: f32,
+    pub cur: f32,
+}
+
+impl Default for Blink {
+    fn default() -> Self {
+        Self {
+            countdown: 2.0,
+            cur: 0.0,
+        }
+    }
+}
+
+impl Blink {
+    fn update(q: Query<(Entity, &mut Blink, &mut Visibility)>, time: Res<Time>, mut cmd: Commands) {
+        for (e, mut blink, mut vis) in q {
+            blink.cur += time.delta_secs();
+            while blink.cur > blink.countdown {
+                blink.cur -= blink.countdown;
+                if *vis == Visibility::Hidden {
+                    *vis = Visibility::Inherited;
+                    cmd.entity(e).remove::<ColliderDisabled>();
+                } else {
+                    *vis = Visibility::Hidden;
+                    cmd.entity(e).insert(ColliderDisabled);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+#[require(CollisionLayers::new(GameLayer::Attackable, LayerMask::ALL))]
+pub struct Bouncy;

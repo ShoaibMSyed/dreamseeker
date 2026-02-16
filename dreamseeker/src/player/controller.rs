@@ -566,6 +566,8 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         }
 
         if self.input.jump.contains(ActionEvents::START) {
+            self.velocity.x *= 1.5;
+            self.velocity.z *= 1.5;
             self.ground_jump(state);
         }
 
@@ -610,6 +612,8 @@ impl<'a, 'w, 's, 'w2, 's2, 'w3> Mover<'a, 'w, 's, 'w2, 's2, 'w3> {
         let PlayerState::WallGrab(wstate) = state else {
             return;
         };
+
+        wstate.prev_air_state.air_jumps = 0;
 
         self.velocity.0 = Vec3::ZERO;
 

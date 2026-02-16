@@ -1,20 +1,25 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+};
 use bevy_enhanced_input::prelude::Start;
 use dreamseeker_util::{construct::Make, observers};
 
 use crate::{
-    input::ui::{Confirm, actions},
+    GameState,
+    input::ui::{Confirm, Move, actions},
     player::{Die, Player},
     trigger::Checkpoint,
 };
 
-use super::ScreenCommandsExt;
+use super::{Screen, ScreenCommandsExt, ScreenHidden, ScreenShown};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, TeleportScreen::update);
 }
 
 #[derive(Component, Reflect)]
+#[require(Screen)]
 pub struct TeleportScreen {
     entries: Vec<(Entity, String)>,
     selected: usize,
@@ -33,7 +38,12 @@ impl TeleportScreen {
             BackgroundColor(Color::linear_rgba(0.0, 0.0, 0.0, 0.5)),
             actions(),
             Make(Self::make),
-            observers![Self::on_confirm],
+            observers![
+                Self::on_confirm,
+                Self::on_shown,
+                Self::on_hidden,
+                Self::on_move
+            ],
         )
     }
 
@@ -44,13 +54,33 @@ impl TeleportScreen {
             .map(|(e, c)| (e, c.id.clone()))
             .collect::<Vec<_>>();
 
-        let selector = (Selector, Text::new("None"));
+        let selector = (
+            Selector,
+            Text::new("None"),
+            Node {
+                padding: UiRect::all(px(10)),
+                ..default()
+            },
+            Outline::new(px(1), px(0), Color::WHITE),
+        );
 
-        let list = (Node {
-            flex_direction: FlexDirection::Row,
-            flex_wrap: FlexWrap::Wrap,
-            ..default()
-        },);
+        let list = (
+            Node {
+                flex_direction: FlexDirection::Row,
+                flex_wrap: FlexWrap::Wrap,
+                ..default()
+            },
+            Children::spawn(SpawnIter(entries.clone().into_iter().map(|(_, name)| {
+                (
+                    Text::new(name),
+                    Outline::new(px(1), px(0), Color::WHITE),
+                    Node {
+                        padding: UiRect::all(px(5)),
+                        ..default()
+                    },
+                )
+            }))),
+        );
 
         let info = (Text::new(
             "Move left and right to select a checkpoint\nUse Space / A to teleport",
@@ -80,9 +110,9 @@ impl TeleportScreen {
                 };
 
                 text.0 = if screen.entries.len() == 0 {
-                    format!("None")
+                    format!("Selected: None")
                 } else {
-                    format!("{}", screen.selected)
+                    format!("Selected: {}", screen.entries[screen.selected].1)
                 };
             }
         }
@@ -106,6 +136,51 @@ impl TeleportScreen {
         cmd.pop_screen();
         cmd.trigger(Die(player.0));
         Ok(())
+    }
+
+    fn on_move(event: On<Start<Move>>, mut screen: Query<&mut TeleportScreen>) -> Result {
+        let mut screen = screen.get_mut(event.context)?;
+
+        if screen.entries.is_empty() {
+            return Ok(());
+        }
+
+        let next = event.value.x > 0.0;
+
+        if next {
+            screen.selected += 1;
+            if screen.selected >= screen.entries.len() {
+                screen.selected = 0;
+            }
+        } else {
+            if screen.selected == 0 {
+                screen.selected = screen.entries.len() - 1;
+            } else {
+                screen.selected -= 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn on_shown(
+        _: On<ScreenShown>,
+        mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
+        mut state: ResMut<NextState<GameState>>,
+    ) {
+        state.set(GameState::Paused);
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+    }
+
+    fn on_hidden(
+        _: On<ScreenHidden>,
+        mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>,
+        mut state: ResMut<NextState<GameState>>,
+    ) {
+        state.set(GameState::InGame);
+        cursor.grab_mode = CursorGrabMode::Confined;
+        cursor.visible = false;
     }
 }
 

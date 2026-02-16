@@ -32,8 +32,6 @@ const MAX_DISTANCE: f32 = 8.0;
 const PAN_SPEED: f32 = 90.0;
 const CENTER_SPEED: f32 = 8.0;
 
-const FOLLOW_SPEED: f32 = 8.0;
-
 const MIN_FOV: f32 = 70f32.to_radians();
 const MAX_FOV: f32 = 100f32.to_radians();
 const FOV_SPEED: f32 = 8.0;
@@ -64,6 +62,8 @@ pub struct PlayerCamera {
     pub visual_rotation: Angle,
     pub visual_speed: f32,
 
+    pub follow_speed: f32,
+
     #[reflect(ignore)]
     pub collider: Collider,
 }
@@ -78,6 +78,8 @@ impl Default for PlayerCamera {
 
             visual_rotation: default(),
             visual_speed: 1.0,
+
+            follow_speed: 8.0,
 
             collider: Collider::sphere(0.25),
         }
@@ -225,7 +227,7 @@ impl PlayerCamera {
             + Vec3::Y * (-player.1.shape().as_cuboid().unwrap().half_extents.y + PLAYER_HEIGHT);
 
         let pp = *player_pos;
-        *player_pos += (target - pp) * (1.0 - f32::exp(-FOLLOW_SPEED * time.delta_secs()));
+        *player_pos += (target - pp) * (1.0 - f32::exp(-camera.1.follow_speed * time.delta_secs()));
 
         let camera_offset = camera.1.offset();
 
