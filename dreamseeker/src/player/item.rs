@@ -158,7 +158,7 @@ impl Item {
         match self {
             Self::Cloud1 | Self::Cloud2 | Self::Cloud3 => "Cloud",
             Self::Rocket => "Rocket",
-            Self::Ice => "Ice",
+            Self::Ice => "Slime",
             Self::Anvil => "Anvil",
             Self::Scroll => "Ninja Scroll",
             Self::Sword => "Sword",

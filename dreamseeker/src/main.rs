@@ -6,7 +6,7 @@ use bevy::{
 use bevy_enhanced_input::EnhancedInputPlugin;
 use bevy_flurx::FlurxPlugin;
 use bevy_framepace::FramepacePlugin;
-use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_skein::SkeinPlugin;
 use dreamseeker_util::{DreamSeekerUtil, construct::Make};
 
@@ -31,7 +31,6 @@ fn main() {
             DreamSeeker,
             SkeinPlugin::default(),
             EguiPlugin::default(),
-            WorldInspectorPlugin::new().run_if(in_state(GameState::Paused)),
         ))
         .run();
 }
